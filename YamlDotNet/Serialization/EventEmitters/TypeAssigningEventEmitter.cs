@@ -225,7 +225,7 @@ namespace YamlDotNet.Serialization.EventEmitters
             base.Emit(eventInfo, emitter);
         }
 
-        private void AssignTypeIfNeeded(ObjectEventInfo eventInfo)
+        private void AssignTypeIfNeeded<TEventInfo>(TEventInfo eventInfo) where TEventInfo : IObjectEventInfo
         {
             if (tagMappings.TryGetValue(eventInfo.Source.Type, out var tag))
             {
