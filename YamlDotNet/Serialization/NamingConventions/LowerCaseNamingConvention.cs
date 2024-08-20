@@ -19,6 +19,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+using System;
 using YamlDotNet.Serialization.Utilities;
 
 namespace YamlDotNet.Serialization.NamingConventions
@@ -33,7 +34,7 @@ namespace YamlDotNet.Serialization.NamingConventions
 
         public string Apply(string value)
         {
-            return value.ToCamelCase().ToLower();
+            return value.AsSpan().ToCamelCase().ToLower();
         }
 
         public string Reverse(string value)
@@ -44,7 +45,12 @@ namespace YamlDotNet.Serialization.NamingConventions
                 return value;
             }
 
-            var result = char.ToUpperInvariant(value[0]) + value.Substring(1);
+            var span = value.AsSpan();
+            //var result = new Span<char>(span);
+
+            var result = new string([char.ToUpperInvariant(span[0]), .. span.Slice(1)]);
+
+            //var result = char.ToUpperInvariant(value[0]) + value.Substring(1);
             return result;
 
         }

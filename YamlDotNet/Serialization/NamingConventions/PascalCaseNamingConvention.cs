@@ -36,12 +36,12 @@ namespace YamlDotNet.Serialization.NamingConventions
 
         public string Apply(string value)
         {
-            return value.ToPascalCase();
+            return value.AsSpan().ToPascalCase();
         }
 
         public string Reverse(string value)
         {
-            var result = value.ToPascalCase();
+            var result = value.AsSpan().ToPascalCase();
             return result;
         }
 

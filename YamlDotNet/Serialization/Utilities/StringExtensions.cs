@@ -20,7 +20,10 @@
 // SOFTWARE.
 
 using System;
+using System.Buffers;
+using System.Linq;
 using System.Text.RegularExpressions;
+using YamlDotNet.Helpers;
 
 namespace YamlDotNet.Serialization.Utilities
 {
@@ -29,10 +32,39 @@ namespace YamlDotNet.Serialization.Utilities
     /// </summary>
     internal static class StringExtensions
     {
-        private static string ToCamelOrPascalCase(string str, Func<char, char> firstLetterTransform)
+#if NET8_0_OR_GREATER
+        private static readonly SearchValues<char> Separators = SearchValues.Create(['-', '_']);
+#else
+        private static readonly char[] Separators = ['-', '_'];
+#endif
+
+        private static string ToCamelOrPascalCase(ReadOnlySpan<char> span, Func<char, char> firstLetterTransform)
         {
-            var text = Regex.Replace(str, "([_\\-])(?<char>[a-z])", match => match.Groups["char"].Value.ToUpperInvariant(), RegexOptions.IgnoreCase);
-            return firstLetterTransform(text[0]) + text.Substring(1);
+            using var wrapper = StringBuilderPool.Rent();
+            var builder = wrapper.Builder;
+
+            for (var i = 0; i < span.Length; i++)
+            {
+                if (Separators.Contains(span[i]))
+                {
+                    if (i + 1 < span.Length)
+                    {
+                        builder.Append(char.ToUpperInvariant(span[i + 1]));
+                        i++;
+                    }
+                }
+                else
+                {
+                    builder.Append(span[i]);
+                }
+            }
+
+            builder[0] = firstLetterTransform(builder[0]);
+
+            return builder.ToString();
+
+            //var text = Regex.Replace(str, "([_\\-])(?<char>[a-z])", match => match.Groups["char"].Value.ToUpperInvariant(), RegexOptions.IgnoreCase);
+            //return firstLetterTransform(text.AsSpan()[0]) + text.Substring(1);
         }
 
 
@@ -41,11 +73,11 @@ namespace YamlDotNet.Serialization.Utilities
         /// camel case (thisIsATest). Camel case is the same as Pascal case, except the first letter
         /// is lowercase.
         /// </summary>
-        /// <param name="str">String to convert</param>
+        /// <param name="span">String to convert</param>
         /// <returns>Converted string</returns>
-        public static string ToCamelCase(this string str)
+        public static string ToCamelCase(this ReadOnlySpan<char> span)
         {
-            return ToCamelOrPascalCase(str, char.ToLowerInvariant);
+            return ToCamelOrPascalCase(span, char.ToLowerInvariant);
         }
 
         /// <summary>
@@ -53,27 +85,72 @@ namespace YamlDotNet.Serialization.Utilities
         /// pascal case (ThisIsATest). Pascal case is the same as camel case, except the first letter
         /// is uppercase.
         /// </summary>
-        /// <param name="str">String to convert</param>
+        /// <param name="span">String to convert</param>
         /// <returns>Converted string</returns>
-        public static string ToPascalCase(this string str)
+        public static string ToPascalCase(this ReadOnlySpan<char> span)
         {
-            return ToCamelOrPascalCase(str, char.ToUpperInvariant);
+            return ToCamelOrPascalCase(span, char.ToUpperInvariant);
         }
 
         /// <summary>
         /// Convert the string from camelcase (thisIsATest) to a hyphenated (this-is-a-test) or 
         /// underscored (this_is_a_test) string
         /// </summary>
-        /// <param name="str">String to convert</param>
+        /// <param name="span">String to convert</param>
         /// <param name="separator">Separator to use between segments</param>
         /// <returns>Converted string</returns>
-        public static string FromCamelCase(this string str, string separator)
+        public static string FromCamelCase(this ReadOnlySpan<char> span, char separator)
         {
-            // Ensure first letter is always lowercase
-            str = char.ToLower(str[0]) + str.Substring(1);
+            using var wrapper = StringBuilderPool.Rent();
+            var builder = wrapper.Builder;
 
-            str = Regex.Replace(str.ToCamelCase(), "(?<char>[A-Z])", match => separator + match.Groups["char"].Value.ToLowerInvariant());
-            return str;
+            // Ensure first letter is always lowercase
+            builder.Append(char.ToLower(span[0]));
+
+            span = span.Slice(1);
+
+            for (var i = 0; i < span.Length; i++)
+            {
+                if (Separators.Contains(span[i]))
+                {
+                    builder.Append(separator);
+                    if (i + 1 < span.Length)
+                    {
+                        builder.Append(char.ToLowerInvariant(span[i + 1]));
+                        i++;
+                    }
+                }
+                else if (char.IsUpper(span[i]))
+                {
+                    builder.Append(separator);
+                    builder.Append(char.ToLowerInvariant(span[i]));
+                }
+                else
+                {
+                    builder.Append(span[i]);
+                }
+            }
+
+                //foreach (var c in span)
+                //{
+                //    if (char.IsUpper(c))
+                //    {
+                //        builder.Append(separator);
+                //        builder.Append(char.ToLowerInvariant(c));
+                //    }
+                //    else
+                //    {
+                //        builder.Append(c);
+                //    }
+                //}
+
+                return builder.ToString();
+
+            //// Ensure first letter is always lowercase
+            //str = char.ToLower(str[0]) + str.Substring(1);
+
+            //str = Regex.Replace(str.ToCamelCase(), "(?<char>[A-Z])", match => separator + match.Groups["char"].Value.ToLowerInvariant());
+            //return str;
         }
     }
 }

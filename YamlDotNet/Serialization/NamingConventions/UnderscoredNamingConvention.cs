@@ -34,12 +34,12 @@ namespace YamlDotNet.Serialization.NamingConventions
 
         public string Apply(string value)
         {
-            return value.FromCamelCase("_");
+            return value.AsSpan().FromCamelCase('_');
         }
 
         public string Reverse(string value)
         {
-            var result = value.ToPascalCase();
+            var result = value.AsSpan().ToPascalCase();
             return result;
         }
 
