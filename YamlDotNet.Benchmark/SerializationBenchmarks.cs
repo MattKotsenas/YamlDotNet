@@ -19,10 +19,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-using System.Text;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Jobs;
 using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
 
 namespace YamlDotNet.Benchmark;
 
@@ -44,11 +44,18 @@ public class SerializationBenchmarks
     }
 
     private readonly IReadOnlyCollection<SampleRecord> configs = Enumerable.Range(0, 10_000).Select(i => new SampleRecord("MyName", "MyDescription")).ToList();
-    private readonly ISerializer serializer = new SerializerBuilder().DisableAliases().Build();
+
+    [Benchmark(Baseline = true)]
+    public string Serialize()
+    {
+        var serializer = new SerializerBuilder().DisableAliases().Build();
+        return serializer.Serialize(configs);
+    }
 
     [Benchmark]
-    public string Serializer()
+    public string SerializeWithNamingConvention()
     {
+        var serializer = new SerializerBuilder().DisableAliases().WithNamingConvention(PascalCaseNamingConvention.Instance).Build();
         return serializer.Serialize(configs);
     }
 }

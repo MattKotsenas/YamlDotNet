@@ -19,36 +19,50 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-using System.IO.Compression;
 using System.Text;
 using BenchmarkDotNet.Attributes;
-using FastSerialization;
-using YamlDotNet.RepresentationModel;
+using BenchmarkDotNet.Jobs;
 using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
 
 namespace YamlDotNet.Benchmark;
 
 [MemoryDiagnoser]
-public class BigFileBenchmark
+[MediumRunJob(RuntimeMoniker.Net80)]
+[MediumRunJob(RuntimeMoniker.Net47)]
+public class DeserializationBenchmarks
 {
-    private string yamlString = "";
-
-    [GlobalSetup]
-    public void Setup()
+    public class Test
     {
-        var stringBuilder = new StringBuilder();
-        //100mb
-        while (stringBuilder.Length < 1000 * 1000 * 100)
-        {
-            stringBuilder.AppendLine("- test");
-        }
-        yamlString = stringBuilder.ToString();
+        public string? Text { get; set; }
+        public int? Number { get; set; }
+        public double? Decimal { get; set; }
+        public bool? Boolean { get; set; }
     }
 
-    [Benchmark]
-    public void LoadLarge()
+    private readonly string yamlString = Setup();
+
+    private static string Setup()
+    {
+        var stringBuilder = new StringBuilder();
+        while (stringBuilder.Length < 1000 * 1000)
+        {
+            stringBuilder.AppendLine("- { Text: word, Number: 42, Decimal: 3.14, Boolean: true }");
+        }
+        return stringBuilder.ToString();
+    }
+
+    [Benchmark(Baseline = true)]
+    public List<Test> Deserialize()
     {
         var deserializer = new DeserializerBuilder().Build();
-        var result = deserializer.Deserialize<List<string>>(yamlString);
+        return deserializer.Deserialize<List<Test>>(yamlString);
+    }
+
+    [Benchmark()]
+    public List<Test> DeserializeWithNamingConvention()
+    {
+        var deserializer = new DeserializerBuilder().WithNamingConvention(PascalCaseNamingConvention.Instance).Build();
+        return deserializer.Deserialize<List<Test>>(yamlString);
     }
 }
