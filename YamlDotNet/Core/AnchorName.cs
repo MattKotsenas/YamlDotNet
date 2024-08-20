@@ -24,12 +24,20 @@ using System.Text.RegularExpressions;
 
 namespace YamlDotNet.Core
 {
-    public struct AnchorName : IEquatable<AnchorName>
+    public partial struct AnchorName : IEquatable<AnchorName>
     {
         public static readonly AnchorName Empty = default;
 
         // https://yaml.org/spec/1.2/spec.html#id2785586
-        private static readonly Regex AnchorPattern = new Regex(@"^[^\[\]\{\},]+$", StandardRegexOptions.Compiled);
+        private const string AnchorPattern = @"^[^\[\]\{\},]+$";
+        private static readonly Regex AnchorRegex = CreateAnchorRegex();
+
+#if NET7_0_OR_GREATER
+        [GeneratedRegex(AnchorPattern)]
+        private static partial Regex CreateAnchorRegex();
+#else
+        private static Regex CreateAnchorRegex() => new(AnchorPattern, RegexOptions.Compiled);
+#endif
 
         private readonly string? value;
 
@@ -41,7 +49,7 @@ namespace YamlDotNet.Core
         {
             this.value = value ?? throw new ArgumentNullException(nameof(value));
 
-            if (!AnchorPattern.IsMatch(value))
+            if (!AnchorRegex.IsMatch(value))
             {
                 throw new ArgumentException($"Anchor cannot be empty or contain disallowed characters: []{{}},\nThe value was '{value}'.", nameof(value));
             }

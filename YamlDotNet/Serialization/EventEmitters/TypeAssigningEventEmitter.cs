@@ -30,12 +30,12 @@ using YamlDotNet.Serialization.NamingConventions;
 
 namespace YamlDotNet.Serialization.EventEmitters
 {
-    public sealed class TypeAssigningEventEmitter : ChainedEventEmitter
+    public sealed partial class TypeAssigningEventEmitter : ChainedEventEmitter
     {
         private readonly IDictionary<Type, TagName> tagMappings;
         private readonly bool quoteNecessaryStrings;
-        private readonly Regex? isSpecialStringValue_Regex;
-        private static readonly string SpecialStrings_Pattern =
+
+        private const string SpecialStrings_Pattern =
             @"^("
                 + @"null|Null|NULL|\~"
                 + @"|true|True|TRUE|false|False|FALSE"
@@ -48,10 +48,17 @@ namespace YamlDotNet.Serialization.EventEmitters
                 + @"|\s.*"
             + @")$";
 
+#if NET7_0_OR_GREATER
+        [GeneratedRegex(SpecialStrings_Pattern)]
+        private static partial Regex CreateSpecialStringsRegex();
+#else
+        private static Regex CreateSpecialStringsRegex() => new(SpecialStrings_Pattern, RegexOptions.Compiled);
+#endif
+
         /// <summary>
         /// This pattern matches strings that are special both in YAML 1.1 and 1.2
         /// </summary>
-        private static readonly string CombinedYaml1_1SpecialStrings_Pattern =
+        private const string CombinedYaml1_1SpecialStrings_Pattern =
             @"^("
                 + @"null|Null|NULL|\~"
                 + @"|true|True|TRUE|false|False|FALSE"
@@ -67,6 +74,15 @@ namespace YamlDotNet.Serialization.EventEmitters
                 + @"|[-+]?\.(inf|Inf|INF)"
                 + @"|\.(nan|NaN|NAN)"
             + @")$";
+
+#if NET7_0_OR_GREATER
+        [GeneratedRegex(CombinedYaml1_1SpecialStrings_Pattern)]
+        private static partial Regex CreateCombinedYaml1_1SpecialStringsRegex();
+#else
+        private static Regex CreateCombinedYaml1_1SpecialStringsRegex() => new(CombinedYaml1_1SpecialStrings_Pattern, RegexOptions.Compiled);
+#endif
+
+        private readonly Regex? isSpecialStringValue_Regex;
 
         private readonly ScalarStyle defaultScalarStyle = ScalarStyle.Any;
         private readonly YamlFormatter formatter;
@@ -88,14 +104,19 @@ namespace YamlDotNet.Serialization.EventEmitters
             this.tagMappings = tagMappings;
             this.quoteNecessaryStrings = quoteNecessaryStrings;
 
-            var specialStringValuePattern = quoteYaml1_1Strings
-                ? CombinedYaml1_1SpecialStrings_Pattern
-                : SpecialStrings_Pattern;
-#if NET40
-            isSpecialStringValue_Regex = new Regex(specialStringValuePattern);
-#else
-            isSpecialStringValue_Regex = new Regex(specialStringValuePattern, RegexOptions.Compiled);
-#endif
+            if (quoteYaml1_1Strings)
+            {
+                isSpecialStringValue_Regex = CreateCombinedYaml1_1SpecialStringsRegex();
+            }
+            else
+            {
+                isSpecialStringValue_Regex = CreateSpecialStringsRegex();
+            }
+//#if NET40
+//            isSpecialStringValue_Regex = new Regex(specialStringValuePattern);
+//#else
+//            isSpecialStringValue_Regex = new Regex(specialStringValuePattern, RegexOptions.Compiled);
+//#endif
             this.enumNamingConvention = enumNamingConvention;
             this.typeInspector = typeInspector;
         }

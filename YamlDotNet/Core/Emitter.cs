@@ -36,10 +36,17 @@ namespace YamlDotNet.Core
     /// <summary>
     /// Emits YAML streams.
     /// </summary>
-    public class Emitter : IEmitter
+    public partial class Emitter : IEmitter
     {
-        private static readonly Regex UriReplacer = new Regex(@"[^0-9A-Za-z_\-;?@=$~\\\)\]/:&+,\.\*\(\[!]",
-            StandardRegexOptions.Compiled | RegexOptions.Singleline);
+        private const string UriPattern = @"[^0-9A-Za-z_\-;?@=$~\\\)\]/:&+,\.\*\(\[!]";
+        private static readonly Regex UriReplacer = CreateUriReplacer();
+
+#if NET7_0_OR_GREATER
+        [GeneratedRegex(UriPattern, RegexOptions.Singleline)]
+        private static partial Regex CreateUriReplacer();
+#else
+        private static Regex CreateUriReplacer() => new(UriPattern, RegexOptions.Compiled | RegexOptions.Singleline);
+#endif
 
         private static readonly string[] newLineSeparators = new[] { "\r\n", "\r", "\n" };
 

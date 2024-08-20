@@ -21,17 +21,40 @@
 
 using System;
 using System.Text.RegularExpressions;
+#if NET7_0_OR_GREATER
+using System.Text.RegularExpressions.Generated;
+#endif
 
 namespace YamlDotNet.Serialization.Utilities
 {
     /// <summary>
     /// Various string extension methods
     /// </summary>
-    internal static class StringExtensions
+    internal static partial class StringExtensions
     {
+        private const string LowercasePattern = "([_\\-])(?<char>[a-z])";
+        private static readonly Regex LowercaseRegex = CreateLowercaseRegex();
+
+#if NET7_0_OR_GREATER
+        [GeneratedRegex(LowercasePattern, RegexOptions.IgnoreCase)]
+        private static partial Regex CreateLowercaseRegex();
+#else
+        private static Regex CreateLowercaseRegex() => new(LowercasePattern, RegexOptions.Compiled | RegexOptions.IgnoreCase);
+#endif
+
+        private const string UppercasePattern = "(?<char>[A-Z])";
+        private static readonly Regex UppercaseRegex = CreateUppercaseRegex();
+
+#if NET7_0_OR_GREATER
+        [GeneratedRegex(UppercasePattern)]
+        private static partial Regex CreateUppercaseRegex();
+#else
+        private static Regex CreateUppercaseRegex() => new(UppercasePattern, RegexOptions.Compiled);
+#endif
+
         private static string ToCamelOrPascalCase(string str, Func<char, char> firstLetterTransform)
         {
-            var text = Regex.Replace(str, "([_\\-])(?<char>[a-z])", match => match.Groups["char"].Value.ToUpperInvariant(), RegexOptions.IgnoreCase);
+            var text = LowercaseRegex.Replace(str, match => match.Groups["char"].Value.ToUpperInvariant());
             return firstLetterTransform(text[0]) + text.Substring(1);
         }
 
@@ -72,7 +95,7 @@ namespace YamlDotNet.Serialization.Utilities
             // Ensure first letter is always lowercase
             str = char.ToLower(str[0]) + str.Substring(1);
 
-            str = Regex.Replace(str.ToCamelCase(), "(?<char>[A-Z])", match => separator + match.Groups["char"].Value.ToLowerInvariant());
+            str = UppercaseRegex.Replace(str.ToCamelCase(), match => separator + match.Groups["char"].Value.ToLowerInvariant());
             return str;
         }
     }

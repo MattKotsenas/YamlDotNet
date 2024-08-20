@@ -27,8 +27,18 @@ namespace YamlDotNet.Core.Tokens
     /// <summary>
     /// Represents a tag directive token.
     /// </summary>
-    public class TagDirective : Token
+    public partial class TagDirective : Token
     {
+        private const string TagHandlePattern = @"^!([0-9A-Za-z_\-]*!)?$";
+
+        private static readonly Regex TagHandleRegex = CreateTagHandleRegex();
+
+#if NET7_0_OR_GREATER
+        [GeneratedRegex(TagHandlePattern)]
+        private static partial Regex CreateTagHandleRegex();
+#else
+        private static Regex CreateTagHandleRegex() => new Regex(TagHandlePattern, RegexOptions.Compiled);
+#endif
 
         /// <summary>
         /// Gets the handle.
@@ -52,8 +62,6 @@ namespace YamlDotNet.Core.Tokens
         {
         }
 
-        private static readonly Regex TagHandlePattern = new Regex(@"^!([0-9A-Za-z_\-]*!)?$", StandardRegexOptions.Compiled);
-
         /// <summary>
         /// Initializes a new instance of the <see cref="TagDirective"/> class.
         /// </summary>
@@ -69,7 +77,7 @@ namespace YamlDotNet.Core.Tokens
                 throw new ArgumentNullException(nameof(handle), "Tag handle must not be empty.");
             }
 
-            if (!TagHandlePattern.IsMatch(handle))
+            if (!TagHandleRegex.IsMatch(handle))
             {
                 throw new ArgumentException("Tag handle must start and end with '!' and contain alphanumerical characters only.", nameof(handle));
             }

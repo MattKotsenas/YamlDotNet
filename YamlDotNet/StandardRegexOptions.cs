@@ -19,12 +19,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-using System.Text.RegularExpressions;
+//using System.Text.RegularExpressions;
 
-namespace YamlDotNet
-{
-    internal static class StandardRegexOptions
-    {
-        public const RegexOptions Compiled = RegexOptions.Compiled;
-    }
-}
+//namespace YamlDotNet
+//{
+//    internal static class StandardRegexOptions
+//    {
+//        public const RegexOptions Compiled = RegexOptions.Compiled;
+//    }
+//}

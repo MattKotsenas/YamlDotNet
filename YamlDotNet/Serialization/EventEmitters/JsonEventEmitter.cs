@@ -27,12 +27,21 @@ using YamlDotNet.Serialization.NamingConventions;
 
 namespace YamlDotNet.Serialization.EventEmitters
 {
-    public sealed class JsonEventEmitter : ChainedEventEmitter
+    public sealed partial class JsonEventEmitter : ChainedEventEmitter
     {
         private readonly YamlFormatter formatter;
         private readonly INamingConvention enumNamingConvention;
         private readonly ITypeInspector typeInspector;
-        private static readonly Regex numericRegex = new Regex(@"^-?\d+\.?\d+$", RegexOptions.Compiled);
+
+        private const string NumericPattern = @"^-?\d+\.?\d+$";
+        private static readonly Regex NumericRegex = CreateNumericRegex();
+
+#if NET7_0_OR_GREATER
+        [GeneratedRegex(NumericPattern)]
+        private static partial Regex CreateNumericRegex();
+#else
+        private static Regex CreateNumericRegex() => new Regex(NumericPattern, RegexOptions.Compiled);
+#endif
 
         public JsonEventEmitter(IEventEmitter nextEmitter, YamlFormatter formatter, INamingConvention enumNamingConvention, ITypeInspector typeInspector)
             : base(nextEmitter)
@@ -90,7 +99,7 @@ namespace YamlDotNet.Serialization.EventEmitters
                     case TypeCode.Decimal:
                         eventInfo.RenderedValue = formatter.FormatNumber(value);
 
-                        if (!numericRegex.IsMatch(eventInfo.RenderedValue))
+                        if (!NumericRegex.IsMatch(eventInfo.RenderedValue))
                         {
                             eventInfo.Style = ScalarStyle.DoubleQuoted;
                         }

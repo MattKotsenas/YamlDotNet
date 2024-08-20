@@ -30,10 +30,78 @@ using YamlDotNet.Serialization.Utilities;
 
 namespace YamlDotNet.Serialization.NodeDeserializers
 {
-    public sealed class ScalarNodeDeserializer : INodeDeserializer
+    public sealed partial class ScalarNodeDeserializer : INodeDeserializer
     {
         private const string BooleanTruePattern = "^(true|y|yes|on)$";
+        private static readonly Regex BooleanTrueRegex = CreateBooleanTrueRegex();
+
+#if NET7_0_OR_GREATER
+        [GeneratedRegex(BooleanTruePattern, RegexOptions.IgnoreCase)]
+        private static partial Regex CreateBooleanTrueRegex();
+#else
+        private static Regex CreateBooleanTrueRegex() => new(BooleanTruePattern, RegexOptions.Compiled | RegexOptions.IgnoreCase);
+#endif
+
         private const string BooleanFalsePattern = "^(false|n|no|off)$";
+        private static readonly Regex BooleanFalseRegex = CreateBooleanFalseRegex();
+
+#if NET7_0_OR_GREATER
+        [GeneratedRegex(BooleanFalsePattern, RegexOptions.IgnoreCase)]
+        private static partial Regex CreateBooleanFalseRegex();
+#else
+        private static Regex CreateBooleanFalseRegex() => new(BooleanFalsePattern, RegexOptions.Compiled | RegexOptions.IgnoreCase);
+#endif
+
+        private const string Base16NumberPattern = "0x[0-9a-fA-F]+";
+        private static readonly Regex Base16NumberRegex = CreateBase16NumberRegex();
+
+#if NET7_0_OR_GREATER
+        [GeneratedRegex(Base16NumberPattern)]
+        private static partial Regex CreateBase16NumberRegex();
+#else
+        private static Regex CreateBase16NumberRegex() => new(Base16NumberPattern, RegexOptions.Compiled);
+#endif
+
+        private const string Base8NumberPattern = "0o[0-9a-fA-F]+";
+        private static readonly Regex Base8NumberRegex = CreateBase8NumberRegex();
+
+#if NET7_0_OR_GREATER
+        [GeneratedRegex(Base8NumberPattern)]
+        private static partial Regex CreateBase8NumberRegex();
+#else
+        private static Regex CreateBase8NumberRegex() => new(Base8NumberPattern, RegexOptions.Compiled);
+#endif
+
+        private const string Base10NumberPattern = @"[-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?";
+        private static readonly Regex Base10NumberRegex = CreateBase10NumberRegex();
+
+#if NET7_0_OR_GREATER
+        [GeneratedRegex(Base10NumberPattern)]
+        private static partial Regex CreateBase10NumberRegex();
+#else
+        private static Regex CreateBase10NumberRegex() => new(Base10NumberPattern, RegexOptions.Compiled);
+#endif
+
+        private const string InfinityNumberPattern = @"^[-+]?(\.inf|\.Inf|\.INF)$";
+        private static readonly Regex InfinityNumberRegex = CreateInfinityNumberRegex();
+
+#if NET7_0_OR_GREATER
+        [GeneratedRegex(InfinityNumberPattern)]
+        private static partial Regex CreateInfinityNumberRegex();
+#else
+        private static Regex CreateInfinityNumberRegex() => new(InfinityNumberPattern, RegexOptions.Compiled);
+#endif
+
+        private const string NaNNumberPattern = @"^(\.nan|\.NaN|\.NAN)$";
+        private static readonly Regex NaNNumberRegex = CreateNaNNumberRegex();
+
+#if NET7_0_OR_GREATER
+        [GeneratedRegex(NaNNumberPattern)]
+        private static partial Regex CreateNaNNumberRegex();
+#else
+        private static Regex CreateNaNNumberRegex() => new(NaNNumberPattern, RegexOptions.Compiled);
+#endif
+
         private readonly bool attemptUnknownTypeDeserialization;
         private readonly ITypeConverter typeConverter;
         private readonly ITypeInspector typeInspector;
@@ -145,11 +213,11 @@ namespace YamlDotNet.Serialization.NodeDeserializers
         {
             bool result;
 
-            if (Regex.IsMatch(value, BooleanTruePattern, RegexOptions.IgnoreCase))
+            if (BooleanTrueRegex.IsMatch(value))// (Regex.IsMatch(value, BooleanTruePattern, RegexOptions.IgnoreCase))
             {
                 result = true;
             }
-            else if (Regex.IsMatch(value, BooleanFalsePattern, RegexOptions.IgnoreCase))
+            else if (BooleanFalseRegex.IsMatch(value))// (Regex.IsMatch(value, BooleanFalsePattern, RegexOptions.IgnoreCase))
             {
                 result = false;
             }
@@ -353,7 +421,7 @@ namespace YamlDotNet.Serialization.NodeDeserializers
                 case "FALSE":
                     return false;
                 default:
-                    if (Regex.IsMatch(v, "0x[0-9a-fA-F]+")) //base16 number
+                    if (Base16NumberRegex.IsMatch(v)) // (Regex.IsMatch(v, "0x[0-9a-fA-F]+")) //base16 number
                     {
                         if (TryAndSwallow(() => Convert.ToByte(v, 16), out result)) { }
                         else if (TryAndSwallow(() => Convert.ToInt16(v, 16), out result)) { }
@@ -366,7 +434,7 @@ namespace YamlDotNet.Serialization.NodeDeserializers
                             result = v;
                         }
                     }
-                    else if (Regex.IsMatch(v, "0o[0-9a-fA-F]+")) //base8 number
+                    else if (Base8NumberRegex.IsMatch(v)) // (Regex.IsMatch(v, "0o[0-9a-fA-F]+")) //base8 number
                     {
                         if (TryAndSwallow(() => Convert.ToByte(v, 8), out result)) { }
                         else if (TryAndSwallow(() => Convert.ToInt16(v, 8), out result)) { }
@@ -379,7 +447,7 @@ namespace YamlDotNet.Serialization.NodeDeserializers
                             result = v;
                         }
                     }
-                    else if (Regex.IsMatch(v, @"[-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?")) //regular number
+                    else if (Base10NumberRegex.IsMatch(v)) // (Regex.IsMatch(v, @"[-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?")) //regular number
                     {
                         if (TryAndSwallow(() => byte.Parse(v, formatter.NumberFormat), out result)) { }
                         else if (TryAndSwallow(() => short.Parse(v, formatter.NumberFormat), out result)) { }
@@ -394,7 +462,7 @@ namespace YamlDotNet.Serialization.NodeDeserializers
                             result = v;
                         }
                     }
-                    else if (Regex.IsMatch(v, @"^[-+]?(\.inf|\.Inf|\.INF)$")) //infinities
+                    else if (InfinityNumberRegex.IsMatch(v)) // (Regex.IsMatch(v, @"^[-+]?(\.inf|\.Inf|\.INF)$")) //infinities
                     {
                         if (v.StartsWith("-"))
                         {
@@ -405,7 +473,7 @@ namespace YamlDotNet.Serialization.NodeDeserializers
                             result = float.PositiveInfinity;
                         }
                     }
-                    else if (Regex.IsMatch(v, @"^(\.nan|\.NaN|\.NAN)$")) //not a number
+                    else if (NaNNumberRegex.IsMatch(v)) // (Regex.IsMatch(v, @"^(\.nan|\.NaN|\.NAN)$")) //not a number
                     {
                         result = float.NaN;
                     }
