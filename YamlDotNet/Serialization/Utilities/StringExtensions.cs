@@ -22,6 +22,7 @@
 using System;
 using System.Buffers;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using YamlDotNet.Helpers;
 
@@ -40,8 +41,8 @@ namespace YamlDotNet.Serialization.Utilities
 
         private static string ToCamelOrPascalCase(ReadOnlySpan<char> span, Func<char, char> firstLetterTransform)
         {
-            using var wrapper = StringBuilderPool.Rent();
-            var builder = wrapper.Builder;
+            //using var wrapper = StringBuilderPool.Rent();
+            var builder = new ValueStringBuilder(span.Length); //wrapper.Builder;
 
             for (var i = 0; i < span.Length; i++)
             {
@@ -101,8 +102,8 @@ namespace YamlDotNet.Serialization.Utilities
         /// <returns>Converted string</returns>
         public static string FromCamelCase(this ReadOnlySpan<char> span, char separator)
         {
-            using var wrapper = StringBuilderPool.Rent();
-            var builder = wrapper.Builder;
+            //using var wrapper = StringBuilderPool.Rent();
+            var builder = new ValueStringBuilder(span.Length);
 
             // Ensure first letter is always lowercase
             builder.Append(char.ToLower(span[0]));
@@ -131,20 +132,20 @@ namespace YamlDotNet.Serialization.Utilities
                 }
             }
 
-                //foreach (var c in span)
-                //{
-                //    if (char.IsUpper(c))
-                //    {
-                //        builder.Append(separator);
-                //        builder.Append(char.ToLowerInvariant(c));
-                //    }
-                //    else
-                //    {
-                //        builder.Append(c);
-                //    }
-                //}
+            //foreach (var c in span)
+            //{
+            //    if (char.IsUpper(c))
+            //    {
+            //        builder.Append(separator);
+            //        builder.Append(char.ToLowerInvariant(c));
+            //    }
+            //    else
+            //    {
+            //        builder.Append(c);
+            //    }
+            //}
 
-                return builder.ToString();
+            return builder.ToString();
 
             //// Ensure first letter is always lowercase
             //str = char.ToLower(str[0]) + str.Substring(1);
