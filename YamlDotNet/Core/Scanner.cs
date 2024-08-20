@@ -651,21 +651,27 @@ namespace YamlDotNet.Core
                     Skip();
                 }
 
-                using var textBuilder = StringBuilderPool.Rent();
-                var text = textBuilder.Builder;
-                while (!analyzer.IsBreakOrZero())
+                var text = StringBuilderPool.Rent();
+                try
                 {
-                    text.Append(ReadCurrentCharacter());
+                    while (!analyzer.IsBreakOrZero())
+                    {
+                        text.Append(ReadCurrentCharacter());
+                    }
+
+                    if (!SkipComments)
+                    {
+                        var isInline = previous != null
+                            && previous.End.Line == start.Line
+                            && previous.End.Column != 1
+                            && !(previous is StreamStart);
+
+                        tokens.Enqueue(new Comment(text.ToString(), isInline, start, cursor.Mark()));
+                    }
                 }
-
-                if (!SkipComments)
+                finally
                 {
-                    var isInline = previous != null
-                        && previous.End.Line == start.Line
-                        && previous.End.Column != 1
-                        && !(previous is StreamStart);
-
-                    tokens.Enqueue(new Comment(text.ToString(), isInline, start, cursor.Mark()));
+                    StringBuilderPool.Return(text);
                 }
             }
         }
@@ -1303,47 +1309,53 @@ namespace YamlDotNet.Core
             //     '[', ']', '{', '}' and ','
             // ref: https://yaml.org/spec/1.2/spec.html#id2785586
 
-            using var valueBuilder = StringBuilderPool.Rent();
-            var value = valueBuilder.Builder;
-            while (!analyzer.IsWhiteBreakOrZero())
+            var value = StringBuilderPool.Rent();
+            try
             {
-                // Anchor: read all allowed characters
-
-                // Alias: read all allowed characters except colon (':'); read colon when token is:
-                //    * not used in key OR
-                //    * used in key and colon is not last character
-
-                if (!analyzer.Check("[]{},") &&
-                    !(isAliasKey && analyzer.Check(':') && analyzer.IsWhiteBreakOrZero(1)))
+                while (!analyzer.IsWhiteBreakOrZero())
                 {
-                    value.Append(ReadCurrentCharacter());
+                    // Anchor: read all allowed characters
+
+                    // Alias: read all allowed characters except colon (':'); read colon when token is:
+                    //    * not used in key OR
+                    //    * used in key and colon is not last character
+
+                    if (!analyzer.Check("[]{},") &&
+                        !(isAliasKey && analyzer.Check(':') && analyzer.IsWhiteBreakOrZero(1)))
+                    {
+                        value.Append(ReadCurrentCharacter());
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                // Check if length of the anchor is greater than 0 and it is followed by
+                // a whitespace character or one of the indicators:
+
+                //      '?', ':', ',', ']', '}', '%', '@', '`'.
+
+
+                if (value.Length == 0 || !(analyzer.IsWhiteBreakOrZero() || analyzer.Check("?:,]}%@`")))
+                {
+                    throw new SyntaxErrorException(start, cursor.Mark(), "While scanning an anchor or alias, found value containing disallowed: []{},");
+                }
+
+                // Create a token.
+                var name = new AnchorName(value.ToString());
+                if (isAlias)
+                {
+                    return new AnchorAlias(name, start, cursor.Mark());
                 }
                 else
                 {
-                    break;
+                    return previousAnchor = new Anchor(name, start, cursor.Mark());
                 }
             }
-
-            // Check if length of the anchor is greater than 0 and it is followed by
-            // a whitespace character or one of the indicators:
-
-            //      '?', ':', ',', ']', '}', '%', '@', '`'.
-
-
-            if (value.Length == 0 || !(analyzer.IsWhiteBreakOrZero() || analyzer.Check("?:,]}%@`")))
+            finally
             {
-                throw new SyntaxErrorException(start, cursor.Mark(), "While scanning an anchor or alias, found value containing disallowed: []{},");
-            }
-
-            // Create a token.
-            var name = new AnchorName(value.ToString());
-            if (isAlias)
-            {
-                return new AnchorAlias(name, start, cursor.Mark());
-            }
-            else
-            {
-                return previousAnchor = new Anchor(name, start, cursor.Mark());
+                StringBuilderPool.Return(value);
             }
         }
 
@@ -1481,201 +1493,205 @@ namespace YamlDotNet.Core
 
         Token ScanBlockScalar(bool isLiteral)
         {
-            using var valueBuilder = StringBuilderPool.Rent();
-            var value = valueBuilder.Builder;
+            var value = StringBuilderPool.Rent();
+            var leadingBreak = StringBuilderPool.Rent();
+            var trailingBreaks = StringBuilderPool.Rent();
 
-            using var leadingBreakBuilder = StringBuilderPool.Rent();
-            var leadingBreak = leadingBreakBuilder.Builder;
-
-            using var trailingBreaksBuilder = StringBuilderPool.Rent();
-            var trailingBreaks = trailingBreaksBuilder.Builder;
-
-            var chomping = 0;
-            var increment = 0;
-            var currentIndent = (long)0;
-            var leadingBlank = false;
-            bool? isFirstLine = null;
-
-            // Eat the indicator '|' or '>'.
-
-            var start = cursor.Mark();
-
-            Skip();
-
-            // Check for a chomping indicator.
-
-            if (analyzer.Check("+-"))
+            try
             {
-                // Set the chomping method and eat the indicator.
+                var chomping = 0;
+                var increment = 0;
+                var currentIndent = (long)0;
+                var leadingBlank = false;
+                bool? isFirstLine = null;
 
-                chomping = analyzer.Check('+') ? +1 : -1;
+                // Eat the indicator '|' or '>'.
+
+                var start = cursor.Mark();
 
                 Skip();
 
-                // Check for an indentation indicator.
+                // Check for a chomping indicator.
 
-                if (analyzer.IsDigit())
+                if (analyzer.Check("+-"))
                 {
-                    // Check that the indentation is greater than 0.
+                    // Set the chomping method and eat the indicator.
 
+                    chomping = analyzer.Check('+') ? +1 : -1;
+
+                    Skip();
+
+                    // Check for an indentation indicator.
+
+                    if (analyzer.IsDigit())
+                    {
+                        // Check that the indentation is greater than 0.
+
+                        if (analyzer.Check('0'))
+                        {
+                            throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a block scalar, found an indentation indicator equal to 0.");
+                        }
+
+                        // Get the indentation level and eat the indicator.
+
+                        increment = analyzer.AsDigit();
+
+                        Skip();
+                    }
+                }
+
+                // Do the same as above, but in the opposite order.
+
+                else if (analyzer.IsDigit())
+                {
                     if (analyzer.Check('0'))
                     {
                         throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a block scalar, found an indentation indicator equal to 0.");
                     }
 
-                    // Get the indentation level and eat the indicator.
-
                     increment = analyzer.AsDigit();
 
                     Skip();
-                }
-            }
 
-            // Do the same as above, but in the opposite order.
+                    if (analyzer.Check("+-"))
+                    {
+                        chomping = analyzer.Check('+') ? +1 : -1;
 
-            else if (analyzer.IsDigit())
-            {
-                if (analyzer.Check('0'))
-                {
-                    throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a block scalar, found an indentation indicator equal to 0.");
+                        Skip();
+                    }
                 }
 
-                increment = analyzer.AsDigit();
+                // Check if there is a comment without whitespace after block scalar indicator (yaml-test-suite: X4QW).
 
-                Skip();
-
-                if (analyzer.Check("+-"))
+                if (analyzer.Check('#'))
                 {
-                    chomping = analyzer.Check('+') ? +1 : -1;
+                    throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a block scalar, found a comment without whtespace after '>' indicator.");
+                }
 
+                // Eat whitespaces and comments to the end of the line.
+
+                while (analyzer.IsWhite())
+                {
                     Skip();
                 }
-            }
 
-            // Check if there is a comment without whitespace after block scalar indicator (yaml-test-suite: X4QW).
+                ProcessComment();
 
-            if (analyzer.Check('#'))
-            {
-                throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a block scalar, found a comment without whtespace after '>' indicator.");
-            }
+                // Check if we are at the end of the line.
 
-            // Eat whitespaces and comments to the end of the line.
-
-            while (analyzer.IsWhite())
-            {
-                Skip();
-            }
-
-            ProcessComment();
-
-            // Check if we are at the end of the line.
-
-            if (!analyzer.IsBreakOrZero())
-            {
-                throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a block scalar, did not find expected comment or line break.");
-            }
-
-            // Eat a line break.
-
-            if (analyzer.IsBreak())
-            {
-                SkipLine();
-                if (!isFirstLine.HasValue)
+                if (!analyzer.IsBreakOrZero())
                 {
-                    isFirstLine = true;
+                    throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a block scalar, did not find expected comment or line break.");
                 }
-                else if (isFirstLine == true)
+
+                // Eat a line break.
+
+                if (analyzer.IsBreak())
                 {
-                    isFirstLine = false;
-                }
-            }
-
-            var end = cursor.Mark();
-
-            // Set the indentation level if it was specified.
-
-            if (increment != 0)
-            {
-                currentIndent = indent >= 0 ? indent + increment : increment;
-            }
-
-            // Scan the leading line breaks and determine the indentation level if needed.
-
-            currentIndent = ScanBlockScalarBreaks(currentIndent, trailingBreaks, isLiteral, ref end, ref isFirstLine);
-            isFirstLine = false;
-
-            // Scan the block scalar content.
-
-            while (cursor.LineOffset == currentIndent && !analyzer.IsZero() && !IsDocumentEnd())
-            {
-                // We are at the beginning of a non-empty line.
-
-                // Is it a trailing whitespace?
-
-                var trailingBlank = analyzer.IsWhite();
-
-                // Check if we need to fold the leading line break.
-
-                if (!isLiteral && StartsWith(leadingBreak, '\n') && !leadingBlank && !trailingBlank)
-                {
-                    // Do we need to join the lines by space?
-
-                    if (trailingBreaks.Length == 0)
+                    SkipLine();
+                    if (!isFirstLine.HasValue)
                     {
-                        value.Append(' ');
+                        isFirstLine = true;
                     }
-
-                    leadingBreak.Length = 0;
+                    else if (isFirstLine == true)
+                    {
+                        isFirstLine = false;
+                    }
                 }
-                else
+
+                var end = cursor.Mark();
+
+                // Set the indentation level if it was specified.
+
+                if (increment != 0)
                 {
-                    value.Append(leadingBreak.ToString());
-                    leadingBreak.Length = 0;
+                    currentIndent = indent >= 0 ? indent + increment : increment;
                 }
 
-                // Append the remaining line breaks.
-
-                value.Append(trailingBreaks.ToString());
-                trailingBreaks.Length = 0;
-
-                // Is it a leading whitespace?
-
-                leadingBlank = analyzer.IsWhite();
-
-                // Consume the current line.
-
-                while (!analyzer.IsBreakOrZero())
-                {
-                    value.Append(ReadCurrentCharacter());
-                }
-
-                // Consume the line break.
-                var lineBreak = ReadLine();
-                if (lineBreak != '\0')
-                {
-                    leadingBreak.Append(lineBreak);
-                }
-
-                // Eat the following indentation spaces and line breaks.
+                // Scan the leading line breaks and determine the indentation level if needed.
 
                 currentIndent = ScanBlockScalarBreaks(currentIndent, trailingBreaks, isLiteral, ref end, ref isFirstLine);
+                isFirstLine = false;
+
+                // Scan the block scalar content.
+
+                while (cursor.LineOffset == currentIndent && !analyzer.IsZero() && !IsDocumentEnd())
+                {
+                    // We are at the beginning of a non-empty line.
+
+                    // Is it a trailing whitespace?
+
+                    var trailingBlank = analyzer.IsWhite();
+
+                    // Check if we need to fold the leading line break.
+
+                    if (!isLiteral && StartsWith(leadingBreak, '\n') && !leadingBlank && !trailingBlank)
+                    {
+                        // Do we need to join the lines by space?
+
+                        if (trailingBreaks.Length == 0)
+                        {
+                            value.Append(' ');
+                        }
+
+                        leadingBreak.Length = 0;
+                    }
+                    else
+                    {
+                        value.Append(leadingBreak.ToString());
+                        leadingBreak.Length = 0;
+                    }
+
+                    // Append the remaining line breaks.
+
+                    value.Append(trailingBreaks.ToString());
+                    trailingBreaks.Length = 0;
+
+                    // Is it a leading whitespace?
+
+                    leadingBlank = analyzer.IsWhite();
+
+                    // Consume the current line.
+
+                    while (!analyzer.IsBreakOrZero())
+                    {
+                        value.Append(ReadCurrentCharacter());
+                    }
+
+                    // Consume the line break.
+                    var lineBreak = ReadLine();
+                    if (lineBreak != '\0')
+                    {
+                        leadingBreak.Append(lineBreak);
+                    }
+
+                    // Eat the following indentation spaces and line breaks.
+
+                    currentIndent = ScanBlockScalarBreaks(currentIndent, trailingBreaks, isLiteral, ref end, ref isFirstLine);
+                }
+
+                // Chomp the tail.
+
+                if (chomping != -1)
+                {
+                    value.Append(leadingBreak);
+                }
+                if (chomping == 1)
+                {
+                    value.Append(trailingBreaks);
+                }
+
+                // Create a token.
+
+                var style = isLiteral ? ScalarStyle.Literal : ScalarStyle.Folded;
+                return new Scalar(value.ToString(), style, start, end);
             }
-
-            // Chomp the tail.
-
-            if (chomping != -1)
+            finally
             {
-                value.Append(leadingBreak);
+                StringBuilderPool.Return(value);
+                StringBuilderPool.Return(leadingBreak);
+                StringBuilderPool.Return(trailingBreaks);
             }
-            if (chomping == 1)
-            {
-                value.Append(trailingBreaks);
-            }
-
-            // Create a token.
-
-            var style = isLiteral ? ScalarStyle.Literal : ScalarStyle.Folded;
-            return new Scalar(value.ToString(), style, start, end);
         }
 
         /// <summary>
@@ -1812,281 +1828,285 @@ namespace YamlDotNet.Core
 
             // Consume the content of the quoted scalar.
 
-            using var valueBuilder = StringBuilderPool.Rent();
-            var value = valueBuilder.Builder;
+            var value = StringBuilderPool.Rent();
 
-            using var whitespacesBuilder = StringBuilderPool.Rent();
-            var whitespaces = whitespacesBuilder.Builder;
+            var whitespaces = StringBuilderPool.Rent();
+            var leadingBreak = StringBuilderPool.Rent();
+            var trailingBreaks = StringBuilderPool.Rent();
 
-            using var leadingBreakBuilder = StringBuilderPool.Rent();
-            var leadingBreak = leadingBreakBuilder.Builder;
-
-            using var trailingBreaksBuilder = StringBuilderPool.Rent();
-            var trailingBreaks = trailingBreaksBuilder.Builder;
-
-            var hasLeadingBlanks = false;
-
-            while (true)
+            try
             {
-                // Check that there are no document indicators at the beginning of the line.
+                var hasLeadingBlanks = false;
 
-                if (IsDocumentIndicator())
+                while (true)
                 {
-                    throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a quoted scalar, found unexpected document indicator.");
-                }
+                    // Check that there are no document indicators at the beginning of the line.
 
-                // Check for EOF.
-
-                if (analyzer.IsZero())
-                {
-                    throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a quoted scalar, found unexpected end of stream.");
-                }
-
-                if (hasLeadingBlanks && !isSingleQuoted && indent >= cursor.LineOffset)
-                {
-                    throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a multi-line double-quoted scalar, found wrong indentation.");
-                }
-
-                hasLeadingBlanks = false;
-
-                // Consume non-blank characters.
-
-                while (!analyzer.IsWhiteBreakOrZero())
-                {
-                    // Check for an escaped single quote.
-
-                    if (isSingleQuoted && analyzer.Check('\'', 0) && analyzer.Check('\'', 1))
+                    if (IsDocumentIndicator())
                     {
-                        value.Append('\'');
-                        Skip();
-                        Skip();
+                        throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a quoted scalar, found unexpected document indicator.");
                     }
 
-                    // Check for the right quote.
+                    // Check for EOF.
 
-                    else if (analyzer.Check(isSingleQuoted ? '\'' : '"'))
+                    if (analyzer.IsZero())
                     {
-                        break;
+                        throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a quoted scalar, found unexpected end of stream.");
                     }
 
-                    // Check for an escaped line break.
-
-                    else if (!isSingleQuoted && analyzer.Check('\\') && analyzer.IsBreak(1))
+                    if (hasLeadingBlanks && !isSingleQuoted && indent >= cursor.LineOffset)
                     {
-                        Skip();
-                        SkipLine();
-                        hasLeadingBlanks = true;
-                        break;
+                        throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a multi-line double-quoted scalar, found wrong indentation.");
                     }
 
-                    // Check for an escape sequence.
+                    hasLeadingBlanks = false;
 
-                    else if (!isSingleQuoted && analyzer.Check('\\'))
+                    // Consume non-blank characters.
+
+                    while (!analyzer.IsWhiteBreakOrZero())
                     {
-                        var codeLength = 0;
+                        // Check for an escaped single quote.
 
-                        // Check the escape character.
-
-                        var escapeCharacter = analyzer.Peek(1);
-                        switch (escapeCharacter)
+                        if (isSingleQuoted && analyzer.Check('\'', 0) && analyzer.Check('\'', 1))
                         {
-                            case 'x':
-                                codeLength = 2;
-                                break;
-
-                            case 'u':
-                                codeLength = 4;
-                                break;
-
-                            case 'U':
-                                codeLength = 8;
-                                break;
-
-                            default:
-                                char unescapedCharacter;
-                                if (SimpleEscapeCodes.TryGetValue(escapeCharacter, out unescapedCharacter))
-                                {
-                                    value.Append(unescapedCharacter);
-                                }
-                                else
-                                {
-                                    throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a quoted scalar, found unknown escape character.");
-                                }
-                                break;
+                            value.Append('\'');
+                            Skip();
+                            Skip();
                         }
 
-                        Skip();
-                        Skip();
+                        // Check for the right quote.
 
-                        // Consume an arbitrary escape code.
-
-                        if (codeLength > 0)
+                        else if (analyzer.Check(isSingleQuoted ? '\'' : '"'))
                         {
-                            var character = 0;
+                            break;
+                        }
 
-                            // Scan the character value.
+                        // Check for an escaped line break.
 
-                            for (var k = 0; k < codeLength; ++k)
+                        else if (!isSingleQuoted && analyzer.Check('\\') && analyzer.IsBreak(1))
+                        {
+                            Skip();
+                            SkipLine();
+                            hasLeadingBlanks = true;
+                            break;
+                        }
+
+                        // Check for an escape sequence.
+
+                        else if (!isSingleQuoted && analyzer.Check('\\'))
+                        {
+                            var codeLength = 0;
+
+                            // Check the escape character.
+
+                            var escapeCharacter = analyzer.Peek(1);
+                            switch (escapeCharacter)
                             {
-                                if (!analyzer.IsHex(k))
-                                {
-                                    throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a quoted scalar, did not find expected hexadecimal number.");
-                                }
-                                character = ((character << 4) + analyzer.AsHex(k));
-                            }
+                                case 'x':
+                                    codeLength = 2;
+                                    break;
 
-                            // Check the value and write the character.
+                                case 'u':
+                                    codeLength = 4;
+                                    break;
 
-                            //check for utf-8 surrogate pair
-                            if (character >= 0xD800 && character <= 0xDFFF)
-                            {
-                                for (var k = 0; k < codeLength; ++k)
-                                {
-                                    Skip();
-                                }
+                                case 'U':
+                                    codeLength = 8;
+                                    break;
 
-                                if (analyzer.Peek(0) == '\\' &&
-                                    (analyzer.Peek(1) == 'u' || analyzer.Peek(1) == 'U'))
-                                {
-                                    Skip(); //escape character
-                                    if (analyzer.Peek(0) == 'u')
+                                default:
+                                    char unescapedCharacter;
+                                    if (SimpleEscapeCodes.TryGetValue(escapeCharacter, out unescapedCharacter))
                                     {
-                                        codeLength = 4;
+                                        value.Append(unescapedCharacter);
                                     }
                                     else
                                     {
-                                        codeLength = 8;
+                                        throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a quoted scalar, found unknown escape character.");
                                     }
-                                    Skip(); //escape code
+                                    break;
+                            }
 
-                                    var lowSurrogate = 0;
+                            Skip();
+                            Skip();
 
-                                    // Scan the character value.
+                            // Consume an arbitrary escape code.
+
+                            if (codeLength > 0)
+                            {
+                                var character = 0;
+
+                                // Scan the character value.
+
+                                for (var k = 0; k < codeLength; ++k)
+                                {
+                                    if (!analyzer.IsHex(k))
+                                    {
+                                        throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a quoted scalar, did not find expected hexadecimal number.");
+                                    }
+                                    character = ((character << 4) + analyzer.AsHex(k));
+                                }
+
+                                // Check the value and write the character.
+
+                                //check for utf-8 surrogate pair
+                                if (character >= 0xD800 && character <= 0xDFFF)
+                                {
                                     for (var k = 0; k < codeLength; ++k)
                                     {
-                                        if (!analyzer.IsHex(0))
-                                        {
-                                            throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a quoted scalar, did not find expected hexadecimal number.");
-                                        }
-                                        lowSurrogate = ((lowSurrogate << 4) + analyzer.AsHex(k));
+                                        Skip();
                                     }
+
+                                    if (analyzer.Peek(0) == '\\' &&
+                                        (analyzer.Peek(1) == 'u' || analyzer.Peek(1) == 'U'))
+                                    {
+                                        Skip(); //escape character
+                                        if (analyzer.Peek(0) == 'u')
+                                        {
+                                            codeLength = 4;
+                                        }
+                                        else
+                                        {
+                                            codeLength = 8;
+                                        }
+                                        Skip(); //escape code
+
+                                        var lowSurrogate = 0;
+
+                                        // Scan the character value.
+                                        for (var k = 0; k < codeLength; ++k)
+                                        {
+                                            if (!analyzer.IsHex(0))
+                                            {
+                                                throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a quoted scalar, did not find expected hexadecimal number.");
+                                            }
+                                            lowSurrogate = ((lowSurrogate << 4) + analyzer.AsHex(k));
+                                        }
+
+                                        for (var k = 0; k < codeLength; ++k)
+                                        {
+                                            Skip();
+                                        }
+
+                                        character = char.ConvertToUtf32((char)character, (char)lowSurrogate);
+                                    }
+                                    else
+                                    {
+                                        throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a quoted scalar, found invalid Unicode surrogates.");
+                                    }
+                                }
+                                else if (character > 0x10FFFF)
+                                {
+                                    throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a quoted scalar, found invalid Unicode character escape code.");
+                                }
+                                else
+                                {
+                                    // Advance the pointer.
 
                                     for (var k = 0; k < codeLength; ++k)
                                     {
                                         Skip();
                                     }
 
-                                    character = char.ConvertToUtf32((char)character, (char)lowSurrogate);
                                 }
-                                else
-                                {
-                                    throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a quoted scalar, found invalid Unicode surrogates.");
-                                }
+
+                                value.Append(char.ConvertFromUtf32(character));
                             }
-                            else if (character > 0x10FFFF)
+                        }
+                        else
+                        {
+                            // It is a non-escaped non-blank character.
+
+                            value.Append(ReadCurrentCharacter());
+                        }
+                    }
+
+                    // Check if we are at the end of the scalar.
+
+                    if (analyzer.Check(isSingleQuoted ? '\'' : '"'))
+                    {
+                        break;
+                    }
+
+                    // Consume blank characters.
+
+                    while (analyzer.IsWhite() || analyzer.IsBreak())
+                    {
+                        if (analyzer.IsWhite())
+                        {
+                            // Consume a space or a tab character.
+
+                            if (!hasLeadingBlanks)
                             {
-                                throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a quoted scalar, found invalid Unicode character escape code.");
+                                whitespaces.Append(ReadCurrentCharacter());
                             }
                             else
                             {
-                                // Advance the pointer.
-
-                                for (var k = 0; k < codeLength; ++k)
-                                {
-                                    Skip();
-                                }
-
+                                Skip();
                             }
-
-                            value.Append(char.ConvertFromUtf32(character));
-                        }
-                    }
-                    else
-                    {
-                        // It is a non-escaped non-blank character.
-
-                        value.Append(ReadCurrentCharacter());
-                    }
-                }
-
-                // Check if we are at the end of the scalar.
-
-                if (analyzer.Check(isSingleQuoted ? '\'' : '"'))
-                {
-                    break;
-                }
-
-                // Consume blank characters.
-
-                while (analyzer.IsWhite() || analyzer.IsBreak())
-                {
-                    if (analyzer.IsWhite())
-                    {
-                        // Consume a space or a tab character.
-
-                        if (!hasLeadingBlanks)
-                        {
-                            whitespaces.Append(ReadCurrentCharacter());
                         }
                         else
                         {
-                            Skip();
+                            // Check if it is a first line break.
+
+                            if (!hasLeadingBlanks)
+                            {
+                                whitespaces.Length = 0;
+                                leadingBreak.Append(ReadLine());
+                                hasLeadingBlanks = true;
+                            }
+                            else
+                            {
+                                trailingBreaks.Append(ReadLine());
+                            }
                         }
                     }
-                    else
-                    {
-                        // Check if it is a first line break.
 
-                        if (!hasLeadingBlanks)
+                    // Join the whitespaces or fold line breaks.
+
+                    if (hasLeadingBlanks)
+                    {
+                        // Do we need to fold line breaks?
+
+                        if (StartsWith(leadingBreak, '\n'))
                         {
-                            whitespaces.Length = 0;
-                            leadingBreak.Append(ReadLine());
-                            hasLeadingBlanks = true;
+                            if (trailingBreaks.Length == 0)
+                            {
+                                value.Append(' ');
+                            }
+                            else
+                            {
+                                value.Append(trailingBreaks.ToString());
+                            }
                         }
                         else
                         {
-                            trailingBreaks.Append(ReadLine());
-                        }
-                    }
-                }
-
-                // Join the whitespaces or fold line breaks.
-
-                if (hasLeadingBlanks)
-                {
-                    // Do we need to fold line breaks?
-
-                    if (StartsWith(leadingBreak, '\n'))
-                    {
-                        if (trailingBreaks.Length == 0)
-                        {
-                            value.Append(' ');
-                        }
-                        else
-                        {
+                            value.Append(leadingBreak.ToString());
                             value.Append(trailingBreaks.ToString());
                         }
+                        leadingBreak.Length = 0;
+                        trailingBreaks.Length = 0;
                     }
                     else
                     {
-                        value.Append(leadingBreak.ToString());
-                        value.Append(trailingBreaks.ToString());
+                        value.Append(whitespaces.ToString());
+                        whitespaces.Length = 0;
                     }
-                    leadingBreak.Length = 0;
-                    trailingBreaks.Length = 0;
                 }
-                else
-                {
-                    value.Append(whitespaces.ToString());
-                    whitespaces.Length = 0;
-                }
+
+                // Eat the right quote.
+
+                Skip();
+
+                return new Scalar(value.ToString(), isSingleQuoted ? ScalarStyle.SingleQuoted : ScalarStyle.DoubleQuoted, start, cursor.Mark());
             }
-
-            // Eat the right quote.
-
-            Skip();
-
-            return new Scalar(value.ToString(), isSingleQuoted ? ScalarStyle.SingleQuoted : ScalarStyle.DoubleQuoted, start, cursor.Mark());
+            finally
+            {
+                StringBuilderPool.Return(value);
+                StringBuilderPool.Return(whitespaces);
+                StringBuilderPool.Return(leadingBreak);
+                StringBuilderPool.Return(trailingBreaks);
+            }
         }
 
         /// <summary>
@@ -2120,183 +2140,186 @@ namespace YamlDotNet.Core
 
         private Scalar ScanPlainScalar(ref bool isMultiline)
         {
-            using var valueBuilder = StringBuilderPool.Rent();
-            var value = valueBuilder.Builder;
+            var value = StringBuilderPool.Rent();
+            var whitespaces = StringBuilderPool.Rent();
+            var leadingBreak = StringBuilderPool.Rent();
+            var trailingBreaks = StringBuilderPool.Rent();
 
-            using var whitespacesBuilder = StringBuilderPool.Rent();
-            var whitespaces = whitespacesBuilder.Builder;
-
-            using var leadingBreakBuilder = StringBuilderPool.Rent();
-            var leadingBreak = leadingBreakBuilder.Builder;
-
-            using var trailingBreaksBuilder = StringBuilderPool.Rent();
-            var trailingBreaks = trailingBreaksBuilder.Builder;
-
-            var hasLeadingBlanks = false;
-            var currentIndent = indent + 1;
-
-            var start = cursor.Mark();
-            var end = start;
-
-            var key = simpleKeys.Peek();
-
-            // Consume the content of the plain scalar.
-
-            while (true)
+            try
             {
-                // Check for a document indicator.
+                var hasLeadingBlanks = false;
+                var currentIndent = indent + 1;
 
-                if (IsDocumentIndicator())
+                var start = cursor.Mark();
+                var end = start;
+
+                var key = simpleKeys.Peek();
+
+                // Consume the content of the plain scalar.
+
+                while (true)
                 {
-                    break;
-                }
+                    // Check for a document indicator.
 
-                // Check for a comment.
-
-                if (analyzer.Check('#'))
-                {
-                    if (indent < 0 && flowLevel == 0)
+                    if (IsDocumentIndicator())
                     {
-                        plainScalarFollowedByComment = true;
+                        break;
                     }
-                    break;
-                }
 
-                var isAliasValue = analyzer.Check('*') && !(key.IsPossible && key.IsRequired);
+                    // Check for a comment.
 
-                // Consume non-blank characters.
-                while (!analyzer.IsWhiteBreakOrZero())
-                {
-                    // Check for indicators that may end a plain scalar.
-
-                    if (analyzer.Check(':') &&
-                        !isAliasValue &&
-                        (analyzer.IsWhiteBreakOrZero(1) ||
-                         (flowLevel > 0 && analyzer.Check(',', 1))) ||
-                        (flowLevel > 0 && analyzer.Check(",[]{}")))
+                    if (analyzer.Check('#'))
                     {
-                        if (flowLevel == 0 && !key.IsPossible)
+                        if (indent < 0 && flowLevel == 0)
                         {
-                            tokens.Enqueue(new Error("While scanning a plain scalar value, found invalid mapping.", cursor.Mark(), cursor.Mark()));
+                            plainScalarFollowedByComment = true;
                         }
                         break;
                     }
 
-                    // Check if we need to join whitespaces and breaks.
+                    var isAliasValue = analyzer.Check('*') && !(key.IsPossible && key.IsRequired);
 
-                    if (hasLeadingBlanks || whitespaces.Length > 0)
+                    // Consume non-blank characters.
+                    while (!analyzer.IsWhiteBreakOrZero())
                     {
-                        if (hasLeadingBlanks)
-                        {
-                            // Do we need to fold line breaks?
+                        // Check for indicators that may end a plain scalar.
 
-                            if (StartsWith(leadingBreak, '\n'))
+                        if (analyzer.Check(':') &&
+                            !isAliasValue &&
+                            (analyzer.IsWhiteBreakOrZero(1) ||
+                             (flowLevel > 0 && analyzer.Check(',', 1))) ||
+                            (flowLevel > 0 && analyzer.Check(",[]{}")))
+                        {
+                            if (flowLevel == 0 && !key.IsPossible)
                             {
-                                if (trailingBreaks.Length == 0)
+                                tokens.Enqueue(new Error("While scanning a plain scalar value, found invalid mapping.", cursor.Mark(), cursor.Mark()));
+                            }
+                            break;
+                        }
+
+                        // Check if we need to join whitespaces and breaks.
+
+                        if (hasLeadingBlanks || whitespaces.Length > 0)
+                        {
+                            if (hasLeadingBlanks)
+                            {
+                                // Do we need to fold line breaks?
+
+                                if (StartsWith(leadingBreak, '\n'))
                                 {
-                                    value.Append(' ');
+                                    if (trailingBreaks.Length == 0)
+                                    {
+                                        value.Append(' ');
+                                    }
+                                    else
+                                    {
+                                        value.Append(trailingBreaks);
+                                    }
                                 }
                                 else
                                 {
+                                    value.Append(leadingBreak);
                                     value.Append(trailingBreaks);
                                 }
+
+                                leadingBreak.Length = 0;
+                                trailingBreaks.Length = 0;
+
+                                hasLeadingBlanks = false;
                             }
                             else
                             {
-                                value.Append(leadingBreak);
-                                value.Append(trailingBreaks);
+                                value.Append(whitespaces);
+                                whitespaces.Length = 0;
+                            }
+                        }
+                        if (flowLevel > 0 && cursor.LineOffset < currentIndent)
+                        {
+                            throw new Exception();
+                        }
+                        // Copy the character.
+
+                        value.Append(ReadCurrentCharacter());
+
+                        end = cursor.Mark();
+                    }
+
+                    // Is it the end?
+
+                    if (!(analyzer.IsWhite() || analyzer.IsBreak()))
+                    {
+                        break;
+                    }
+
+                    // Consume blank characters.
+
+                    while (analyzer.IsWhite() || analyzer.IsBreak())
+                    {
+                        if (analyzer.IsWhite())
+                        {
+                            // Check for tab character that abuse indentation.
+
+                            if (hasLeadingBlanks && cursor.LineOffset < currentIndent && analyzer.IsTab())
+                            {
+                                throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a plain scalar, found a tab character that violate indentation.");
                             }
 
-                            leadingBreak.Length = 0;
-                            trailingBreaks.Length = 0;
+                            // Consume a space or a tab character.
 
-                            hasLeadingBlanks = false;
+                            if (!hasLeadingBlanks)
+                            {
+                                whitespaces.Append(ReadCurrentCharacter());
+                            }
+                            else
+                            {
+                                Skip();
+                            }
                         }
                         else
                         {
-                            value.Append(whitespaces);
-                            whitespaces.Length = 0;
+                            isMultiline = true;
+
+                            // Check if it is a first line break.
+
+                            if (!hasLeadingBlanks)
+                            {
+                                whitespaces.Length = 0;
+                                leadingBreak.Append(ReadLine());
+                                hasLeadingBlanks = true;
+                            }
+                            else
+                            {
+                                trailingBreaks.Append(ReadLine());
+                            }
                         }
                     }
-                    if (flowLevel > 0 && cursor.LineOffset < currentIndent)
+
+                    // Check indentation level.
+
+                    if (flowLevel == 0 && cursor.LineOffset < currentIndent)
                     {
-                        throw new Exception();
-                    }
-                    // Copy the character.
-
-                    value.Append(ReadCurrentCharacter());
-
-                    end = cursor.Mark();
-                }
-
-                // Is it the end?
-
-                if (!(analyzer.IsWhite() || analyzer.IsBreak()))
-                {
-                    break;
-                }
-
-                // Consume blank characters.
-
-                while (analyzer.IsWhite() || analyzer.IsBreak())
-                {
-                    if (analyzer.IsWhite())
-                    {
-                        // Check for tab character that abuse indentation.
-
-                        if (hasLeadingBlanks && cursor.LineOffset < currentIndent && analyzer.IsTab())
-                        {
-                            throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a plain scalar, found a tab character that violate indentation.");
-                        }
-
-                        // Consume a space or a tab character.
-
-                        if (!hasLeadingBlanks)
-                        {
-                            whitespaces.Append(ReadCurrentCharacter());
-                        }
-                        else
-                        {
-                            Skip();
-                        }
-                    }
-                    else
-                    {
-                        isMultiline = true;
-
-                        // Check if it is a first line break.
-
-                        if (!hasLeadingBlanks)
-                        {
-                            whitespaces.Length = 0;
-                            leadingBreak.Append(ReadLine());
-                            hasLeadingBlanks = true;
-                        }
-                        else
-                        {
-                            trailingBreaks.Append(ReadLine());
-                        }
+                        break;
                     }
                 }
 
-                // Check indentation level.
+                // Note that we change the 'simple_key_allowed' flag.
 
-                if (flowLevel == 0 && cursor.LineOffset < currentIndent)
+                if (hasLeadingBlanks)
                 {
-                    break;
+                    simpleKeyAllowed = true;
                 }
+
+                // Create a token.
+
+                return new Scalar(value.ToString(), ScalarStyle.Plain, start, end);
             }
-
-            // Note that we change the 'simple_key_allowed' flag.
-
-            if (hasLeadingBlanks)
+            finally
             {
-                simpleKeyAllowed = true;
+                StringBuilderPool.Return(value);
+                StringBuilderPool.Return(whitespaces);
+                StringBuilderPool.Return(leadingBreak);
+                StringBuilderPool.Return(trailingBreaks);
             }
-
-            // Create a token.
-
-            return new Scalar(value.ToString(), ScalarStyle.Plain, start, end);
         }
 
 
@@ -2331,38 +2354,44 @@ namespace YamlDotNet.Core
         /// </summary>
         private string ScanDirectiveName(in Mark start)
         {
-            using var nameBuilder = StringBuilderPool.Rent();
-            var name = nameBuilder.Builder;
+            var name = StringBuilderPool.Rent();
 
-            // Consume the directive name.
-
-            while (analyzer.IsAlphaNumericDashOrUnderscore())
+            try
             {
-                name.Append(ReadCurrentCharacter());
+                // Consume the directive name.
+
+                while (analyzer.IsAlphaNumericDashOrUnderscore())
+                {
+                    name.Append(ReadCurrentCharacter());
+                }
+
+                // Check if the name is empty.
+
+                if (name.Length == 0)
+                {
+                    throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a directive, could not find expected directive name.");
+                }
+
+                // Check for end of stream
+
+                if (analyzer.EndOfInput)
+                {
+                    throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a directive, found unexpected end of stream.");
+                }
+
+                // Check for an blank character after the name.
+
+                if (!analyzer.IsWhiteBreakOrZero())
+                {
+                    throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a directive, found unexpected non-alphabetical character.");
+                }
+
+                return name.ToString();
             }
-
-            // Check if the name is empty.
-
-            if (name.Length == 0)
+            finally
             {
-                throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a directive, could not find expected directive name.");
+                StringBuilderPool.Return(name);
             }
-
-            // Check for end of stream
-
-            if (analyzer.EndOfInput)
-            {
-                throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a directive, found unexpected end of stream.");
-            }
-
-            // Check for an blank character after the name.
-
-            if (!analyzer.IsWhiteBreakOrZero())
-            {
-                throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a directive, found unexpected non-alphabetical character.");
-            }
-
-            return name.ToString();
         }
 
         private void SkipWhitespaces()
@@ -2450,61 +2479,67 @@ namespace YamlDotNet.Core
 
         private string ScanTagUri(string? head, Mark start)
         {
-            using var tagBuilder = StringBuilderPool.Rent();
-            var tag = tagBuilder.Builder;
+            var tag = StringBuilderPool.Rent();
 
-            if (head != null && head.Length > 1)
+            try
             {
+                if (head != null && head.Length > 1)
+                {
 #if NETFRAMEWORK || NETSTANDARD2_0
                 tag.Append(head.Substring(1));
 #else
-                tag.Append(head.AsSpan()[1..]);
+                    tag.Append(head.AsSpan()[1..]);
 #endif
-            }
-
-            // Scan the tag.
-
-            // The set of characters that may appear in URI is as follows:
-
-            //      '0'-'9', 'A'-'Z', 'a'-'z', '_', '-', ';', '/', '?', ':', '@', '&',
-            //      '=', '+', '$', ',', '.', '!', '~', '*', '\'', '(', ')', '[', ']',
-            //      '%'.
-
-
-            while (analyzer.IsAlphaNumericDashOrUnderscore() || analyzer.Check(";/?:@&=+$.!~*'()[]%") ||
-                   (analyzer.Check(',') && !analyzer.IsBreak(1)))
-            {
-                // Check if it is a URI-escape sequence.
-
-                if (analyzer.Check('%'))
-                {
-                    tag.Append(ScanUriEscapes(start));
                 }
-                else if (analyzer.Check('+'))
+
+                // Scan the tag.
+
+                // The set of characters that may appear in URI is as follows:
+
+                //      '0'-'9', 'A'-'Z', 'a'-'z', '_', '-', ';', '/', '?', ':', '@', '&',
+                //      '=', '+', '$', ',', '.', '!', '~', '*', '\'', '(', ')', '[', ']',
+                //      '%'.
+
+
+                while (analyzer.IsAlphaNumericDashOrUnderscore() || analyzer.Check(";/?:@&=+$.!~*'()[]%") ||
+                       (analyzer.Check(',') && !analyzer.IsBreak(1)))
                 {
-                    tag.Append(' ');
-                    Skip();
+                    // Check if it is a URI-escape sequence.
+
+                    if (analyzer.Check('%'))
+                    {
+                        tag.Append(ScanUriEscapes(start));
+                    }
+                    else if (analyzer.Check('+'))
+                    {
+                        tag.Append(' ');
+                        Skip();
+                    }
+                    else
+                    {
+                        tag.Append(ReadCurrentCharacter());
+                    }
                 }
-                else
+
+                // Check if the tag is non-empty.
+
+                if (tag.Length == 0)
                 {
-                    tag.Append(ReadCurrentCharacter());
+                    return string.Empty;
                 }
+
+                var result = tag.ToString();
+                if (result.EndsWith(","))
+                {
+                    throw new SyntaxErrorException(cursor.Mark(), cursor.Mark(), "Unexpected comma at end of tag");
+                }
+
+                return result;
             }
-
-            // Check if the tag is non-empty.
-
-            if (tag.Length == 0)
+            finally
             {
-                return string.Empty;
+                StringBuilderPool.Return(tag);
             }
-
-            var result = tag.ToString();
-            if (result.EndsWith(","))
-            {
-                throw new SyntaxErrorException(cursor.Mark(), cursor.Mark(), "Unexpected comma at end of tag");
-            }
-
-            return result;
         }
 
         private static readonly byte[] EmptyBytes = new byte[0];
@@ -2595,38 +2630,45 @@ namespace YamlDotNet.Core
 
             // Copy the '!' character.
 
-            using var tagHandleBuilder = StringBuilderPool.Rent();
-            var tagHandle = tagHandleBuilder.Builder;
-            tagHandle.Append(ReadCurrentCharacter());
+            var tagHandle = StringBuilderPool.Rent();
 
-            // Copy all subsequent alphabetical and numerical characters.
-
-            while (analyzer.IsAlphaNumericDashOrUnderscore())
+            try
             {
                 tagHandle.Append(ReadCurrentCharacter());
-            }
 
-            // Check if the trailing character is '!' and copy it.
+                // Copy all subsequent alphabetical and numerical characters.
 
-            if (analyzer.Check('!'))
-            {
-                tagHandle.Append(ReadCurrentCharacter());
-            }
-            else
-            {
-
-                // It's either the '!' tag or not really a tag handle.  If it's a %TAG
-                // directive, it's an error.  If it's a tag token, it must be a part of
-                // URI.
-
-
-                if (isDirective && (tagHandle.Length != 1 || tagHandle[0] != '!'))
+                while (analyzer.IsAlphaNumericDashOrUnderscore())
                 {
-                    throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a tag directive, did not find expected '!'.");
+                    tagHandle.Append(ReadCurrentCharacter());
                 }
-            }
 
-            return tagHandle.ToString();
+                // Check if the trailing character is '!' and copy it.
+
+                if (analyzer.Check('!'))
+                {
+                    tagHandle.Append(ReadCurrentCharacter());
+                }
+                else
+                {
+
+                    // It's either the '!' tag or not really a tag handle.  If it's a %TAG
+                    // directive, it's an error.  If it's a tag token, it must be a part of
+                    // URI.
+
+
+                    if (isDirective && (tagHandle.Length != 1 || tagHandle[0] != '!'))
+                    {
+                        throw new SyntaxErrorException(start, cursor.Mark(), "While scanning a tag directive, did not find expected '!'.");
+                    }
+                }
+
+                return tagHandle.ToString();
+            }
+            finally
+            {
+                StringBuilderPool.Return(tagHandle);
+            }
         }
 
         /// <summary>

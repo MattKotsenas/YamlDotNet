@@ -345,24 +345,31 @@ namespace YamlDotNet.RepresentationModel
                 return MaximumRecursionLevelReachedToStringValue;
             }
 
-            using var textBuilder = StringBuilderPool.Rent();
-            var text = textBuilder.Builder;
-            text.Append("{ ");
+            var text = StringBuilderPool.Rent();
 
-            foreach (var child in children)
+            try
             {
-                if (text.Length > 2)
+                text.Append("{ ");
+
+                foreach (var child in children)
                 {
-                    text.Append(", ");
+                    if (text.Length > 2)
+                    {
+                        text.Append(", ");
+                    }
+                    text.Append("{ ").Append(child.Key.ToString(level)).Append(", ").Append(child.Value.ToString(level)).Append(" }");
                 }
-                text.Append("{ ").Append(child.Key.ToString(level)).Append(", ").Append(child.Value.ToString(level)).Append(" }");
+
+                text.Append(" }");
+
+                level.Decrement();
+
+                return text.ToString();
             }
-
-            text.Append(" }");
-
-            level.Decrement();
-
-            return text.ToString();
+            finally
+            {
+                StringBuilderPool.Return(text);
+            }
         }
 
         #region IEnumerable<KeyValuePair<YamlNode,YamlNode>> Members

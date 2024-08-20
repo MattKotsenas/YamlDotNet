@@ -312,207 +312,214 @@ namespace YamlDotNet.Core
                 blockIndicators = true;
             }
 
-            using var slab = StringLookAheadBufferPool.Rent(value);
-            var buffer = new CharacterAnalyzer<StringLookAheadBuffer>(slab.Buffer);
-            var preceededByWhitespace = true;
-            var followedByWhitespace = buffer.IsWhiteBreakOrZero(1);
-
-            var leadingSpace = false;
-            var leadingBreak = false;
-            var trailingSpace = false;
-            var trailingBreak = false;
-            var leadingQuote = false;
-
-            var breakSpace = false;
-            var spaceBreak = false;
-            var previousSpace = false;
-            var previousBreak = false;
-            var lineOfSpaces = false;
-
-            var lineBreaks = false;
-
-            var specialCharacters = !ValueIsRepresentableInOutputEncoding(value);
-            var singleQuotes = false;
-            var linesOfSpaces = false;
-
-            var isFirst = true;
-            while (!buffer.EndOfInput)
+            var slab = StringLookAheadBufferPool.Rent(value);
+            try
             {
-                if (isFirst)
+                var buffer = new CharacterAnalyzer<StringLookAheadBuffer>(slab);
+                var preceededByWhitespace = true;
+                var followedByWhitespace = buffer.IsWhiteBreakOrZero(1);
+
+                var leadingSpace = false;
+                var leadingBreak = false;
+                var trailingSpace = false;
+                var trailingBreak = false;
+                var leadingQuote = false;
+
+                var breakSpace = false;
+                var spaceBreak = false;
+                var previousSpace = false;
+                var previousBreak = false;
+                var lineOfSpaces = false;
+
+                var lineBreaks = false;
+
+                var specialCharacters = !ValueIsRepresentableInOutputEncoding(value);
+                var singleQuotes = false;
+                var linesOfSpaces = false;
+
+                var isFirst = true;
+                while (!buffer.EndOfInput)
                 {
-                    if (buffer.Check(@"#,[]{}&*!|>\""%@`'"))
+                    if (isFirst)
                     {
-                        flowIndicators = true;
-                        blockIndicators = true;
-                        leadingQuote = buffer.Check('\'');
+                        if (buffer.Check(@"#,[]{}&*!|>\""%@`'"))
+                        {
+                            flowIndicators = true;
+                            blockIndicators = true;
+                            leadingQuote = buffer.Check('\'');
+                            singleQuotes |= buffer.Check('\'');
+                        }
+
+                        if (buffer.Check("?:"))
+                        {
+                            flowIndicators = true;
+                            if (followedByWhitespace)
+                            {
+                                blockIndicators = true;
+                            }
+                        }
+
+                        if (buffer.Check('-') && followedByWhitespace)
+                        {
+                            flowIndicators = true;
+                            blockIndicators = true;
+                        }
+                    }
+                    else
+                    {
+                        if (buffer.Check(",?[]{}"))
+                        {
+                            flowIndicators = true;
+                        }
+
+                        if (buffer.Check(':'))
+                        {
+                            flowIndicators = true;
+                            if (followedByWhitespace)
+                            {
+                                blockIndicators = true;
+                            }
+                        }
+
+                        if (buffer.Check('#') && preceededByWhitespace)
+                        {
+                            flowIndicators = true;
+                            blockIndicators = true;
+                        }
+
                         singleQuotes |= buffer.Check('\'');
                     }
 
-                    if (buffer.Check("?:"))
+                    if (!specialCharacters && !buffer.IsPrintable())
                     {
-                        flowIndicators = true;
-                        if (followedByWhitespace)
+                        specialCharacters = true;
+                    }
+
+                    if (buffer.IsBreak())
+                    {
+                        lineBreaks = true;
+                    }
+
+                    if (buffer.IsSpace())
+                    {
+                        if (isFirst)
                         {
-                            blockIndicators = true;
+                            leadingSpace = true;
                         }
-                    }
 
-                    if (buffer.Check('-') && followedByWhitespace)
-                    {
-                        flowIndicators = true;
-                        blockIndicators = true;
-                    }
-                }
-                else
-                {
-                    if (buffer.Check(",?[]{}"))
-                    {
-                        flowIndicators = true;
-                    }
-
-                    if (buffer.Check(':'))
-                    {
-                        flowIndicators = true;
-                        if (followedByWhitespace)
+                        if (buffer.Buffer.Position >= buffer.Buffer.Length - 1)
                         {
-                            blockIndicators = true;
+                            trailingSpace = true;
                         }
-                    }
 
-                    if (buffer.Check('#') && preceededByWhitespace)
+                        if (previousBreak)
+                        {
+                            breakSpace = true;
+                            lineOfSpaces = true;
+                        }
+
+                        previousSpace = true;
+                        previousBreak = false;
+                    }
+                    else if (buffer.IsBreak())
                     {
-                        flowIndicators = true;
-                        blockIndicators = true;
+                        if (isFirst)
+                        {
+                            leadingBreak = true;
+                        }
+
+                        if (buffer.Buffer.Position >= buffer.Buffer.Length - 1)
+                        {
+                            trailingBreak = true;
+                        }
+
+                        if (previousSpace)
+                        {
+                            spaceBreak = true;
+                        }
+
+                        if (lineOfSpaces)
+                        {
+                            linesOfSpaces = true;
+                        }
+
+                        previousSpace = false;
+                        previousBreak = true;
+                    }
+                    else
+                    {
+                        previousSpace = false;
+                        previousBreak = false;
+                        lineOfSpaces = false;
                     }
 
-                    singleQuotes |= buffer.Check('\'');
+                    preceededByWhitespace = buffer.IsWhiteBreakOrZero();
+                    buffer.Skip(1);
+                    if (!buffer.EndOfInput)
+                    {
+                        followedByWhitespace = buffer.IsWhiteBreakOrZero(1);
+                    }
+
+                    isFirst = false;
                 }
 
-                if (!specialCharacters && !buffer.IsPrintable())
+                scalarData.IsFlowPlainAllowed = true;
+                scalarData.IsBlockPlainAllowed = true;
+                scalarData.IsSingleQuotedAllowed = true;
+                scalarData.IsBlockAllowed = true;
+
+                if (leadingSpace || leadingBreak || trailingSpace || trailingBreak || leadingQuote)
                 {
-                    specialCharacters = true;
+                    scalarData.IsFlowPlainAllowed = false;
+                    scalarData.IsBlockPlainAllowed = false;
                 }
 
-                if (buffer.IsBreak())
+                if (trailingSpace)
                 {
-                    lineBreaks = true;
+                    scalarData.IsBlockAllowed = false;
                 }
 
-                if (buffer.IsSpace())
+                if (breakSpace)
                 {
-                    if (isFirst)
-                    {
-                        leadingSpace = true;
-                    }
-
-                    if (buffer.Buffer.Position >= buffer.Buffer.Length - 1)
-                    {
-                        trailingSpace = true;
-                    }
-
-                    if (previousBreak)
-                    {
-                        breakSpace = true;
-                        lineOfSpaces = true;
-                    }
-
-                    previousSpace = true;
-                    previousBreak = false;
+                    scalarData.IsFlowPlainAllowed = false;
+                    scalarData.IsBlockPlainAllowed = false;
+                    scalarData.IsSingleQuotedAllowed = false;
                 }
-                else if (buffer.IsBreak())
+
+                if (spaceBreak || specialCharacters)
                 {
-                    if (isFirst)
-                    {
-                        leadingBreak = true;
-                    }
-
-                    if (buffer.Buffer.Position >= buffer.Buffer.Length - 1)
-                    {
-                        trailingBreak = true;
-                    }
-
-                    if (previousSpace)
-                    {
-                        spaceBreak = true;
-                    }
-
-                    if (lineOfSpaces)
-                    {
-                        linesOfSpaces = true;
-                    }
-
-                    previousSpace = false;
-                    previousBreak = true;
+                    scalarData.IsFlowPlainAllowed = false;
+                    scalarData.IsBlockPlainAllowed = false;
+                    scalarData.IsSingleQuotedAllowed = false;
                 }
-                else
+                if (linesOfSpaces)
                 {
-                    previousSpace = false;
-                    previousBreak = false;
-                    lineOfSpaces = false;
+                    scalarData.IsBlockAllowed = false;
                 }
 
-                preceededByWhitespace = buffer.IsWhiteBreakOrZero();
-                buffer.Skip(1);
-                if (!buffer.EndOfInput)
+                scalarData.IsMultiline = lineBreaks;
+                if (lineBreaks)
                 {
-                    followedByWhitespace = buffer.IsWhiteBreakOrZero(1);
+                    scalarData.IsFlowPlainAllowed = false;
+                    scalarData.IsBlockPlainAllowed = false;
                 }
 
-                isFirst = false;
+                if (flowIndicators)
+                {
+                    scalarData.IsFlowPlainAllowed = false;
+                }
+
+                if (blockIndicators)
+                {
+                    scalarData.IsBlockPlainAllowed = false;
+                }
+
+                scalarData.HasSingleQuotes = singleQuotes;
             }
-
-            scalarData.IsFlowPlainAllowed = true;
-            scalarData.IsBlockPlainAllowed = true;
-            scalarData.IsSingleQuotedAllowed = true;
-            scalarData.IsBlockAllowed = true;
-
-            if (leadingSpace || leadingBreak || trailingSpace || trailingBreak || leadingQuote)
+            finally
             {
-                scalarData.IsFlowPlainAllowed = false;
-                scalarData.IsBlockPlainAllowed = false;
+                StringLookAheadBufferPool.Return(slab);
             }
-
-            if (trailingSpace)
-            {
-                scalarData.IsBlockAllowed = false;
-            }
-
-            if (breakSpace)
-            {
-                scalarData.IsFlowPlainAllowed = false;
-                scalarData.IsBlockPlainAllowed = false;
-                scalarData.IsSingleQuotedAllowed = false;
-            }
-
-            if (spaceBreak || specialCharacters)
-            {
-                scalarData.IsFlowPlainAllowed = false;
-                scalarData.IsBlockPlainAllowed = false;
-                scalarData.IsSingleQuotedAllowed = false;
-            }
-            if (linesOfSpaces)
-            {
-                scalarData.IsBlockAllowed = false;
-            }
-
-            scalarData.IsMultiline = lineBreaks;
-            if (lineBreaks)
-            {
-                scalarData.IsFlowPlainAllowed = false;
-                scalarData.IsBlockPlainAllowed = false;
-            }
-
-            if (flowIndicators)
-            {
-                scalarData.IsFlowPlainAllowed = false;
-            }
-
-            if (blockIndicators)
-            {
-                scalarData.IsBlockPlainAllowed = false;
-            }
-
-            scalarData.HasSingleQuotes = singleQuotes;
         }
 
         private bool ValueIsRepresentableInOutputEncoding(string value)
@@ -1794,28 +1801,35 @@ namespace YamlDotNet.Core
 
         private void WriteBlockScalarHints(string value)
         {
-            using var slab = StringLookAheadBufferPool.Rent(value);
-            var analyzer = new CharacterAnalyzer<StringLookAheadBuffer>(slab.Buffer);
+            var slab = StringLookAheadBufferPool.Rent(value);
+            try
+            {
+                var analyzer = new CharacterAnalyzer<StringLookAheadBuffer>(slab);
 
-            if (analyzer.IsSpace() || analyzer.IsBreak())
-            {
-                var indentHint = bestIndent.ToString(CultureInfo.InvariantCulture);
-                WriteIndicator(indentHint, false, false, false);
-            }
+                if (analyzer.IsSpace() || analyzer.IsBreak())
+                {
+                    var indentHint = bestIndent.ToString(CultureInfo.InvariantCulture);
+                    WriteIndicator(indentHint, false, false, false);
+                }
 
-            string? chompHint = null;
-            if (value.Length == 0 || !analyzer.IsBreak(value.Length - 1))
-            {
-                chompHint = "-";
-            }
-            else if (value.Length >= 2 && analyzer.IsBreak(value.Length - 2))
-            {
-                chompHint = "+";
-            }
+                string? chompHint = null;
+                if (value.Length == 0 || !analyzer.IsBreak(value.Length - 1))
+                {
+                    chompHint = "-";
+                }
+                else if (value.Length >= 2 && analyzer.IsBreak(value.Length - 2))
+                {
+                    chompHint = "+";
+                }
 
-            if (chompHint != null)
+                if (chompHint != null)
+                {
+                    WriteIndicator(chompHint, false, false, false);
+                }
+            }
+            finally
             {
-                WriteIndicator(chompHint, false, false, false);
+                StringLookAheadBufferPool.Return(slab);
             }
         }
 
@@ -1892,13 +1906,20 @@ namespace YamlDotNet.Core
         {
             return UriReplacer.Replace(text, delegate (Match match)
             {
-                using var bufferBuilder = StringBuilderPool.Rent();
-                var buffer = bufferBuilder.Builder;
-                foreach (var toEncode in Encoding.UTF8.GetBytes(match.Value))
+                var buffer = StringBuilderPool.Rent();
+                try
                 {
-                    buffer.AppendFormat("%{0:X02}", toEncode);
+                    //var buffer = bufferBuilder.Builder;
+                    foreach (var toEncode in Encoding.UTF8.GetBytes(match.Value))
+                    {
+                        buffer.AppendFormat("%{0:X02}", toEncode);
+                    }
+                    return buffer.ToString();
                 }
-                return buffer.ToString();
+                finally
+                {
+                    StringBuilderPool.Return(buffer);
+                }
             });
         }
 

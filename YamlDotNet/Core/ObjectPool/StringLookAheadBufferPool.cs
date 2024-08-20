@@ -32,35 +32,18 @@ namespace YamlDotNet.Core.ObjectPool
     {
         private static readonly ObjectPool<StringLookAheadBuffer> Pool = ObjectPool.Create(new DefaultPooledObjectPolicy<StringLookAheadBuffer>());
 
-        public static BufferWrapper Rent(string value)
+        public static StringLookAheadBuffer Rent(string value)
         {
             var buffer = Pool.Get();
             Debug.Assert(buffer.Length == 0);
 
             buffer.Value = value;
-            return new BufferWrapper(buffer, Pool);
+            return buffer;
         }
 
-        internal readonly struct BufferWrapper : IDisposable
+        public static void Return(StringLookAheadBuffer buffer)
         {
-            public readonly StringLookAheadBuffer Buffer;
-            private readonly ObjectPool<StringLookAheadBuffer> pool;
-
-            public BufferWrapper(StringLookAheadBuffer buffer, ObjectPool<StringLookAheadBuffer> pool)
-            {
-                Buffer = buffer;
-                this.pool = pool;
-            }
-
-            public override string ToString()
-            {
-                return Buffer.ToString()!;
-            }
-
-            public void Dispose()
-            {
-                pool.Return(Buffer);
-            }
+            Pool.Return(buffer);
         }
     }
 }

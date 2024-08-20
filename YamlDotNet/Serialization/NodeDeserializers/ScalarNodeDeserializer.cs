@@ -164,127 +164,134 @@ namespace YamlDotNet.Serialization.NodeDeserializers
 
         private object DeserializeIntegerHelper(TypeCode typeCode, string value)
         {
-            using var numberBuilderStringBuilder = StringBuilderPool.Rent();
-            var numberBuilder = numberBuilderStringBuilder.Builder;
-            var currentIndex = 0;
-            var isNegative = false;
-            int numberBase;
-            ulong result = 0;
+            var numberBuilder = StringBuilderPool.Rent();
 
-            if (value[0] == '-')
+            try
             {
-                currentIndex++;
-                isNegative = true;
-            }
+                var currentIndex = 0;
+                var isNegative = false;
+                int numberBase;
+                ulong result = 0;
 
-            else if (value[0] == '+')
-            {
-                currentIndex++;
-            }
-
-            if (value[currentIndex] == '0')
-            {
-                // Could be binary, octal, hex, decimal (0)
-
-                // If there are no characters remaining, it's a decimal zero
-                if (currentIndex == value.Length - 1)
+                if (value[0] == '-')
                 {
-                    numberBase = 10;
-                    result = 0;
+                    currentIndex++;
+                    isNegative = true;
                 }
 
-                else
+                else if (value[0] == '+')
                 {
-                    // Check the next character
                     currentIndex++;
+                }
 
-                    if (value[currentIndex] == 'b')
+                if (value[currentIndex] == '0')
+                {
+                    // Could be binary, octal, hex, decimal (0)
+
+                    // If there are no characters remaining, it's a decimal zero
+                    if (currentIndex == value.Length - 1)
                     {
-                        // Binary
-                        numberBase = 2;
-
-                        currentIndex++;
-                    }
-
-                    else if (value[currentIndex] == 'x')
-                    {
-                        // Hex
-                        numberBase = 16;
-
-                        currentIndex++;
+                        numberBase = 10;
+                        result = 0;
                     }
 
                     else
                     {
-                        // Octal
-                        numberBase = 8;
-                    }
-                }
+                        // Check the next character
+                        currentIndex++;
 
-                // Copy remaining digits to the number buffer (skip underscores)
-                while (currentIndex < value.Length)
-                {
-                    if (value[currentIndex] != '_')
+                        if (value[currentIndex] == 'b')
+                        {
+                            // Binary
+                            numberBase = 2;
+
+                            currentIndex++;
+                        }
+
+                        else if (value[currentIndex] == 'x')
+                        {
+                            // Hex
+                            numberBase = 16;
+
+                            currentIndex++;
+                        }
+
+                        else
+                        {
+                            // Octal
+                            numberBase = 8;
+                        }
+                    }
+
+                    // Copy remaining digits to the number buffer (skip underscores)
+                    while (currentIndex < value.Length)
                     {
-                        numberBuilder.Append(value[currentIndex]);
+                        if (value[currentIndex] != '_')
+                        {
+                            numberBuilder.Append(value[currentIndex]);
+                        }
+                        currentIndex++;
                     }
-                    currentIndex++;
+
+                    // Parse the magnitude of the number
+                    switch (numberBase)
+                    {
+                        case 2:
+                        case 8:
+                            // TODO: how to incorporate the numberFormat?
+                            result = Convert.ToUInt64(numberBuilder.ToString(), numberBase);
+                            break;
+
+                        case 16:
+                            result = ulong.Parse(numberBuilder.ToString(), NumberStyles.HexNumber, formatter.NumberFormat);
+                            break;
+
+                        case 10:
+                            // Result is already zero
+                            break;
+                    }
                 }
 
-                // Parse the magnitude of the number
-                switch (numberBase)
+                else
                 {
-                    case 2:
-                    case 8:
-                        // TODO: how to incorporate the numberFormat?
-                        result = Convert.ToUInt64(numberBuilder.ToString(), numberBase);
-                        break;
+                    // Could be decimal or base 60
+                    var chunks = value.Substring(currentIndex).Split(':');
+                    result = 0;
 
-                    case 16:
-                        result = ulong.Parse(numberBuilder.ToString(), NumberStyles.HexNumber, formatter.NumberFormat);
-                        break;
+                    for (var chunkIndex = 0; chunkIndex < chunks.Length; chunkIndex++)
+                    {
+                        result *= 60;
 
-                    case 10:
-                        // Result is already zero
-                        break;
+                        // TODO: verify that chunks after the first are non-negative and less than 60
+                        result += ulong.Parse(chunks[chunkIndex].Replace("_", ""));
+                    }
                 }
-            }
 
-            else
-            {
-                // Could be decimal or base 60
-                var chunks = value.Substring(currentIndex).Split(':');
-                result = 0;
-
-                for (var chunkIndex = 0; chunkIndex < chunks.Length; chunkIndex++)
+                if (isNegative)
                 {
-                    result *= 60;
+                    long toCast;
 
-                    // TODO: verify that chunks after the first are non-negative and less than 60
-                    result += ulong.Parse(chunks[chunkIndex].Replace("_", ""));
-                }
-            }
+                    // we do this because abs(long.minvalue) is 1 more than long.maxvalue.
+                    if (result == 9223372036854775808) // abs(long.minvalue) => ulong
+                    {
+                        toCast = long.MinValue;
+                    }
+                    else
+                    {
+                        // this will throw if it's too big.
+                        toCast = checked(-(long)result);
+                    }
 
-            if (isNegative)
-            {
-                long toCast;
-
-                // we do this because abs(long.minvalue) is 1 more than long.maxvalue.
-                if (result == 9223372036854775808) // abs(long.minvalue) => ulong
-                {
-                    toCast = long.MinValue;
+                    return CastInteger(toCast, typeCode);
                 }
                 else
                 {
-                    // this will throw if it's too big.
-                    toCast = checked(-(long)result);
+                    return CastInteger(result, typeCode);
                 }
-
-                return CastInteger(toCast, typeCode);
             }
-            else
+            finally
             {
-                return CastInteger(result, typeCode);
+                StringBuilderPool.Return(numberBuilder);
             }
         }
 

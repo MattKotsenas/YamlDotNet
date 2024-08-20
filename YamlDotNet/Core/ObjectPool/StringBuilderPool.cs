@@ -37,33 +37,16 @@ namespace YamlDotNet.Core.ObjectPool
             MaximumRetainedCapacity = 1024
         });
 
-        public static BuilderWrapper Rent()
+        public static StringBuilder Rent()
         {
             var builder = Pool.Get();
             Debug.Assert(builder.Length == 0);
-            return new BuilderWrapper(builder, Pool);
+            return builder;
         }
 
-        internal readonly struct BuilderWrapper : IDisposable
+        public static void Return(StringBuilder builder)
         {
-            public readonly StringBuilder Builder;
-            private readonly ObjectPool<StringBuilder> pool;
-
-            public BuilderWrapper(StringBuilder builder, ObjectPool<StringBuilder> pool)
-            {
-                Builder = builder;
-                this.pool = pool;
-            }
-
-            public override string ToString()
-            {
-                return Builder.ToString();
-            }
-
-            public void Dispose()
-            {
-                pool.Return(Builder);
-            }
+            Pool.Return(builder);
         }
     }
 }
