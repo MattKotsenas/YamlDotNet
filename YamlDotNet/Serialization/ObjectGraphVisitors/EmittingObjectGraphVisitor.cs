@@ -50,27 +50,32 @@ namespace YamlDotNet.Serialization.ObjectGraphVisitors
 
         void IObjectGraphVisitor<IEmitter>.VisitScalar(IObjectDescriptor scalar, IEmitter context, ObjectSerializer serializer)
         {
-            eventEmitter.Emit(new ScalarEventInfo(scalar), context);
+            var eventInfo = new ScalarEventInfo(scalar);
+            eventEmitter.Emit(ref eventInfo, context);
         }
 
         void IObjectGraphVisitor<IEmitter>.VisitMappingStart(IObjectDescriptor mapping, Type keyType, Type valueType, IEmitter context, ObjectSerializer serializer)
         {
-            eventEmitter.Emit(new MappingStartEventInfo(mapping), context);
+            var eventInfo = new MappingStartEventInfo(mapping);
+            eventEmitter.Emit(ref eventInfo, context);
         }
 
         void IObjectGraphVisitor<IEmitter>.VisitMappingEnd(IObjectDescriptor mapping, IEmitter context, ObjectSerializer serializer)
         {
-            eventEmitter.Emit(new MappingEndEventInfo(mapping), context);
+            var eventInfo = new MappingEndEventInfo(mapping);
+            eventEmitter.Emit(ref eventInfo, context);
         }
 
         void IObjectGraphVisitor<IEmitter>.VisitSequenceStart(IObjectDescriptor sequence, Type elementType, IEmitter context, ObjectSerializer serializer)
         {
-            eventEmitter.Emit(new SequenceStartEventInfo(sequence), context);
+            var eventInfo = new SequenceStartEventInfo(sequence);
+            eventEmitter.Emit(ref eventInfo, context);
         }
 
         void IObjectGraphVisitor<IEmitter>.VisitSequenceEnd(IObjectDescriptor sequence, IEmitter context, ObjectSerializer serializer)
         {
-            eventEmitter.Emit(new SequenceEndEventInfo(sequence), context);
+            var eventInfo = new SequenceEndEventInfo(sequence);
+            eventEmitter.Emit(ref eventInfo, context);
         }
     }
 }

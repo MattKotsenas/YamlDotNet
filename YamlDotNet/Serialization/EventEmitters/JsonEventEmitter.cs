@@ -42,20 +42,20 @@ namespace YamlDotNet.Serialization.EventEmitters
             this.typeInspector = typeInspector;
         }
 
-        public override void Emit(AliasEventInfo eventInfo, IEmitter emitter)
+        public override void Emit(ref AliasEventInfo eventInfo, IEmitter emitter)
         {
-            eventInfo.NeedsExpansion = true;
+            eventInfo = eventInfo with { NeedsExpansion = true };
         }
 
-        public override void Emit(ScalarEventInfo eventInfo, IEmitter emitter)
+        public override void Emit(ref ScalarEventInfo eventInfo, IEmitter emitter)
         {
-            eventInfo.IsPlainImplicit = true;
-            eventInfo.Style = ScalarStyle.Plain;
+            eventInfo = eventInfo with { IsPlainImplicit = true };
+            eventInfo = eventInfo with { Style = ScalarStyle.Plain };
 
             var value = eventInfo.Source.Value;
             if (value == null)
             {
-                eventInfo.RenderedValue = "null";
+                eventInfo = eventInfo with { RenderedValue = "null" };
             }
             else
             {
@@ -63,7 +63,7 @@ namespace YamlDotNet.Serialization.EventEmitters
                 switch (typeCode)
                 {
                     case TypeCode.Boolean:
-                        eventInfo.RenderedValue = formatter.FormatBoolean(value);
+                        eventInfo = eventInfo with { RenderedValue = formatter.FormatBoolean(value) };
                         break;
 
                     case TypeCode.Byte:
@@ -77,44 +77,44 @@ namespace YamlDotNet.Serialization.EventEmitters
                         var valueIsEnum = eventInfo.Source.Type.IsEnum();
                         if (valueIsEnum)
                         {
-                            eventInfo.RenderedValue = formatter.FormatEnum(value, typeInspector, enumNamingConvention);
-                            eventInfo.Style = formatter.PotentiallyQuoteEnums(value) ? ScalarStyle.DoubleQuoted : ScalarStyle.Plain;
+                            eventInfo = eventInfo with { RenderedValue = formatter.FormatEnum(value, typeInspector, enumNamingConvention) };
+                            eventInfo = eventInfo with { Style = formatter.PotentiallyQuoteEnums(value) ? ScalarStyle.DoubleQuoted : ScalarStyle.Plain };
                             break;
                         }
 
-                        eventInfo.RenderedValue = formatter.FormatNumber(value);
+                        eventInfo = eventInfo with { RenderedValue = formatter.FormatNumber(value) };
                         break;
 
                     case TypeCode.Single:
                     case TypeCode.Double:
                     case TypeCode.Decimal:
-                        eventInfo.RenderedValue = formatter.FormatNumber(value);
+                        eventInfo = eventInfo with { RenderedValue = formatter.FormatNumber(value) };
 
                         if (!numericRegex.IsMatch(eventInfo.RenderedValue))
                         {
-                            eventInfo.Style = ScalarStyle.DoubleQuoted;
+                            eventInfo = eventInfo with { Style = ScalarStyle.DoubleQuoted };
                         }
 
                         break;
 
                     case TypeCode.String:
                     case TypeCode.Char:
-                        eventInfo.RenderedValue = value.ToString()!;
-                        eventInfo.Style = ScalarStyle.DoubleQuoted;
+                        eventInfo = eventInfo with { RenderedValue = value.ToString()! };
+                        eventInfo = eventInfo with { Style = ScalarStyle.DoubleQuoted };
                         break;
 
                     case TypeCode.DateTime:
-                        eventInfo.RenderedValue = formatter.FormatDateTime(value);
+                        eventInfo = eventInfo with { RenderedValue = formatter.FormatDateTime(value) };
                         break;
 
                     case TypeCode.Empty:
-                        eventInfo.RenderedValue = "null";
+                        eventInfo = eventInfo with { RenderedValue = "null" };
                         break;
 
                     default:
                         if (eventInfo.Source.Type == typeof(TimeSpan))
                         {
-                            eventInfo.RenderedValue = formatter.FormatTimeSpan(value);
+                            eventInfo = eventInfo with { RenderedValue = formatter.FormatTimeSpan(value) };
                             break;
                         }
 
@@ -122,21 +122,21 @@ namespace YamlDotNet.Serialization.EventEmitters
                 }
             }
 
-            base.Emit(eventInfo, emitter);
+            base.Emit(ref eventInfo, emitter);
         }
 
-        public override void Emit(MappingStartEventInfo eventInfo, IEmitter emitter)
+        public override void Emit(ref MappingStartEventInfo eventInfo, IEmitter emitter)
         {
-            eventInfo.Style = MappingStyle.Flow;
+            eventInfo = eventInfo with { Style = MappingStyle.Flow };
 
-            base.Emit(eventInfo, emitter);
+            base.Emit(ref eventInfo, emitter);
         }
 
-        public override void Emit(SequenceStartEventInfo eventInfo, IEmitter emitter)
+        public override void Emit(ref SequenceStartEventInfo eventInfo, IEmitter emitter)
         {
-            eventInfo.Style = SequenceStyle.Flow;
+            eventInfo = eventInfo with { Style = SequenceStyle.Flow };
 
-            base.Emit(eventInfo, emitter);
+            base.Emit(ref eventInfo, emitter);
         }
     }
 }

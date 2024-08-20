@@ -19,17 +19,22 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-using YamlDotNet.Core;
+// Polyfill implementation of IsExternalInit that supports the `init` keyword on autoproperties
 
-namespace YamlDotNet.Serialization
+#if !NET5_0_OR_GREATER
+
+namespace System.Runtime.CompilerServices;
+
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+
+/// <summary>
+/// Reserved to be used by the compiler for tracking metadata. This class should not be used by developers in source code.
+/// </summary>
+[ExcludeFromCodeCoverage]
+[DebuggerNonUserCode]
+public static class IsExternalInit
 {
-    public interface IEventEmitter
-    {
-        void Emit(ref AliasEventInfo eventInfo, IEmitter emitter);
-        void Emit(ref ScalarEventInfo eventInfo, IEmitter emitter);
-        void Emit(ref MappingStartEventInfo eventInfo, IEmitter emitter);
-        void Emit(ref MappingEndEventInfo eventInfo, IEmitter emitter);
-        void Emit(ref SequenceStartEventInfo eventInfo, IEmitter emitter);
-        void Emit(ref SequenceEndEventInfo eventInfo, IEmitter emitter);
-    }
 }
+
+#endif

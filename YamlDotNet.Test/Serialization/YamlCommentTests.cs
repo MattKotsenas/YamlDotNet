@@ -197,17 +197,17 @@ namespace YamlDotNet.Test.Serialization
                 this.types = types;
             }
 
-            public override void Emit(MappingStartEventInfo eventInfo, IEmitter emitter)
+            public override void Emit(ref MappingStartEventInfo eventInfo, IEmitter emitter)
             {
                 foreach (var type in types)
                 {
                     if (eventInfo.Source.Type == type)
                     {
-                        eventInfo.Style = MappingStyle.Flow;
+                        eventInfo = eventInfo with { Style = MappingStyle.Flow };
                         break;
                     }
                 }
-                base.Emit(eventInfo, emitter);
+                base.Emit(ref eventInfo, emitter);
             }
         }
         #endregion

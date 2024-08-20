@@ -37,34 +37,34 @@ namespace YamlDotNet.Serialization.EventEmitters
             this.nextEmitter = nextEmitter ?? throw new ArgumentNullException(nameof(nextEmitter));
         }
 
-        public virtual void Emit(AliasEventInfo eventInfo, IEmitter emitter)
+        public virtual void Emit(ref AliasEventInfo eventInfo, IEmitter emitter)
         {
-            nextEmitter.Emit(eventInfo, emitter);
+            nextEmitter.Emit(ref eventInfo, emitter);
         }
 
-        public virtual void Emit(ScalarEventInfo eventInfo, IEmitter emitter)
+        public virtual void Emit(ref ScalarEventInfo eventInfo, IEmitter emitter)
         {
-            nextEmitter.Emit(eventInfo, emitter);
+            nextEmitter.Emit(ref eventInfo, emitter);
         }
 
-        public virtual void Emit(MappingStartEventInfo eventInfo, IEmitter emitter)
+        public virtual void Emit(ref MappingStartEventInfo eventInfo, IEmitter emitter)
         {
-            nextEmitter.Emit(eventInfo, emitter);
+            nextEmitter.Emit(ref eventInfo, emitter);
         }
 
-        public virtual void Emit(MappingEndEventInfo eventInfo, IEmitter emitter)
+        public virtual void Emit(ref MappingEndEventInfo eventInfo, IEmitter emitter)
         {
-            nextEmitter.Emit(eventInfo, emitter);
+            nextEmitter.Emit(ref eventInfo, emitter);
         }
 
-        public virtual void Emit(SequenceStartEventInfo eventInfo, IEmitter emitter)
+        public virtual void Emit(ref SequenceStartEventInfo eventInfo, IEmitter emitter)
         {
-            nextEmitter.Emit(eventInfo, emitter);
+            nextEmitter.Emit(ref eventInfo, emitter);
         }
 
-        public virtual void Emit(SequenceEndEventInfo eventInfo, IEmitter emitter)
+        public virtual void Emit(ref SequenceEndEventInfo eventInfo, IEmitter emitter)
         {
-            nextEmitter.Emit(eventInfo, emitter);
+            nextEmitter.Emit(ref eventInfo, emitter);
         }
     }
 }

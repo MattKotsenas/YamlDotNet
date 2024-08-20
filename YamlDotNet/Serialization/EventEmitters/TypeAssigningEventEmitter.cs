@@ -100,15 +100,15 @@ namespace YamlDotNet.Serialization.EventEmitters
             this.typeInspector = typeInspector;
         }
 
-        public override void Emit(ScalarEventInfo eventInfo, IEmitter emitter)
+        public override void Emit(ref ScalarEventInfo eventInfo, IEmitter emitter)
         {
             var suggestedStyle = ScalarStyle.Plain;
 
             var value = eventInfo.Source.Value;
             if (value == null)
             {
-                eventInfo.Tag = JsonSchema.Tags.Null;
-                eventInfo.RenderedValue = "";
+                eventInfo = eventInfo with { Tag = JsonSchema.Tags.Null };
+                eventInfo = eventInfo with { RenderedValue = "" };
             }
             else
             {
@@ -116,8 +116,8 @@ namespace YamlDotNet.Serialization.EventEmitters
                 switch (typeCode)
                 {
                     case TypeCode.Boolean:
-                        eventInfo.Tag = JsonSchema.Tags.Bool;
-                        eventInfo.RenderedValue = formatter.FormatBoolean(value);
+                        eventInfo = eventInfo with { Tag = JsonSchema.Tags.Bool };
+                        eventInfo = eventInfo with { RenderedValue = formatter.FormatBoolean(value) };
                         break;
 
                     case TypeCode.Byte:
@@ -131,8 +131,8 @@ namespace YamlDotNet.Serialization.EventEmitters
                         //Enum's are special cases, they fall in here, but get sent out as a string.
                         if (eventInfo.Source.Type.IsEnum)
                         {
-                            eventInfo.Tag = FailsafeSchema.Tags.Str;
-                            eventInfo.RenderedValue = formatter.FormatEnum(value, typeInspector, enumNamingConvention);
+                            eventInfo = eventInfo with { Tag = FailsafeSchema.Tags.Str };
+                            eventInfo = eventInfo with { RenderedValue = formatter.FormatEnum(value, typeInspector, enumNamingConvention) };
 
                             if (quoteNecessaryStrings &&
                                 IsSpecialStringValue(eventInfo.RenderedValue) &&
@@ -147,30 +147,30 @@ namespace YamlDotNet.Serialization.EventEmitters
                         }
                         else
                         {
-                            eventInfo.Tag = JsonSchema.Tags.Int;
-                            eventInfo.RenderedValue = formatter.FormatNumber(value);
+                            eventInfo = eventInfo with { Tag = JsonSchema.Tags.Int };
+                            eventInfo = eventInfo with { RenderedValue = formatter.FormatNumber(value) };
                         }
                         break;
 
                     case TypeCode.Single:
-                        eventInfo.Tag = JsonSchema.Tags.Float;
-                        eventInfo.RenderedValue = formatter.FormatNumber((float)value);
+                        eventInfo = eventInfo with { Tag = JsonSchema.Tags.Float };
+                        eventInfo = eventInfo with { RenderedValue = formatter.FormatNumber((float)value) };
                         break;
 
                     case TypeCode.Double:
-                        eventInfo.Tag = JsonSchema.Tags.Float;
-                        eventInfo.RenderedValue = formatter.FormatNumber((double)value);
+                        eventInfo = eventInfo with { Tag = JsonSchema.Tags.Float };
+                        eventInfo = eventInfo with { RenderedValue = formatter.FormatNumber((double)value) };
                         break;
 
                     case TypeCode.Decimal:
-                        eventInfo.Tag = JsonSchema.Tags.Float;
-                        eventInfo.RenderedValue = formatter.FormatNumber(value);
+                        eventInfo = eventInfo with { Tag = JsonSchema.Tags.Float };
+                        eventInfo = eventInfo with { RenderedValue = formatter.FormatNumber(value) };
                         break;
 
                     case TypeCode.String:
                     case TypeCode.Char:
-                        eventInfo.Tag = FailsafeSchema.Tags.Str;
-                        eventInfo.RenderedValue = value.ToString()!;
+                        eventInfo = eventInfo with { Tag = FailsafeSchema.Tags.Str };
+                        eventInfo = eventInfo with { RenderedValue = value.ToString()! };
 
                         if (quoteNecessaryStrings && IsSpecialStringValue(eventInfo.RenderedValue))
                         {
@@ -184,19 +184,19 @@ namespace YamlDotNet.Serialization.EventEmitters
                         break;
 
                     case TypeCode.DateTime:
-                        eventInfo.Tag = DefaultSchema.Tags.Timestamp;
-                        eventInfo.RenderedValue = formatter.FormatDateTime(value);
+                        eventInfo = eventInfo with { Tag = DefaultSchema.Tags.Timestamp };
+                        eventInfo = eventInfo with { RenderedValue = formatter.FormatDateTime(value) };
                         break;
 
                     case TypeCode.Empty:
-                        eventInfo.Tag = JsonSchema.Tags.Null;
-                        eventInfo.RenderedValue = "";
+                        eventInfo = eventInfo with { Tag = JsonSchema.Tags.Null };
+                        eventInfo = eventInfo with { RenderedValue = "" };
                         break;
 
                     default:
                         if (eventInfo.Source.Type == typeof(TimeSpan))
                         {
-                            eventInfo.RenderedValue = formatter.FormatTimeSpan(value);
+                            eventInfo = eventInfo with { RenderedValue = formatter.FormatTimeSpan(value) };
                             break;
                         }
 
@@ -204,32 +204,32 @@ namespace YamlDotNet.Serialization.EventEmitters
                 }
             }
 
-            eventInfo.IsPlainImplicit = true;
+            eventInfo = eventInfo with { IsPlainImplicit = true };
             if (eventInfo.Style == ScalarStyle.Any)
             {
-                eventInfo.Style = suggestedStyle;
+                eventInfo = eventInfo with { Style = suggestedStyle };
             }
 
-            base.Emit(eventInfo, emitter);
+            base.Emit(ref eventInfo, emitter);
         }
 
-        public override void Emit(MappingStartEventInfo eventInfo, IEmitter emitter)
+        public override void Emit(ref MappingStartEventInfo eventInfo, IEmitter emitter)
         {
-            AssignTypeIfNeeded(eventInfo);
-            base.Emit(eventInfo, emitter);
+            AssignTypeIfNeeded(ref eventInfo);
+            base.Emit(ref eventInfo, emitter);
         }
 
-        public override void Emit(SequenceStartEventInfo eventInfo, IEmitter emitter)
+        public override void Emit(ref SequenceStartEventInfo eventInfo, IEmitter emitter)
         {
-            AssignTypeIfNeeded(eventInfo);
-            base.Emit(eventInfo, emitter);
+            AssignTypeIfNeeded(ref eventInfo);
+            base.Emit(ref eventInfo, emitter);
         }
 
-        private void AssignTypeIfNeeded<TEventInfo>(TEventInfo eventInfo) where TEventInfo : IObjectEventInfo
+        private void AssignTypeIfNeeded<TEventInfo>(ref TEventInfo eventInfo) where TEventInfo : struct, IObjectEventInfo
         {
             if (tagMappings.TryGetValue(eventInfo.Source.Type, out var tag))
             {
-                eventInfo.Tag = tag;
+                eventInfo = eventInfo with { Tag = tag };
             }
         }
 

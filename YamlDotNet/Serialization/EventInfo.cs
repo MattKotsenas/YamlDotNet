@@ -25,7 +25,7 @@ using YamlDotNet.Core.Events;
 
 namespace YamlDotNet.Serialization
 {
-    public class AliasEventInfo
+    public readonly struct AliasEventInfo
     {
         public AliasEventInfo(IObjectDescriptor source, AnchorName alias)
         {
@@ -40,17 +40,17 @@ namespace YamlDotNet.Serialization
 
         public IObjectDescriptor Source { get; }
         public AnchorName Alias { get; }
-        public bool NeedsExpansion { get; set; }
+        public bool NeedsExpansion { get; init; }
     }
 
     internal interface IObjectEventInfo
     {
         public IObjectDescriptor Source { get; }
-        public AnchorName Anchor { get; set; }
-        public TagName Tag { get; set; }
+        public AnchorName Anchor { get; init; }
+        public TagName Tag { get; init; }
     }
 
-    public sealed class ScalarEventInfo : IObjectEventInfo
+    public readonly struct ScalarEventInfo : IObjectEventInfo
     {
         public ScalarEventInfo(IObjectDescriptor source)
         {
@@ -60,15 +60,15 @@ namespace YamlDotNet.Serialization
         }
 
         public IObjectDescriptor Source { get; }
-        public AnchorName Anchor { get; set; }
-        public TagName Tag { get; set; }
-        public string RenderedValue { get; set; }
-        public ScalarStyle Style { get; set; }
-        public bool IsPlainImplicit { get; set; }
-        public bool IsQuotedImplicit { get; set; }
+        public AnchorName Anchor { get; init; }
+        public TagName Tag { get; init; }
+        public string RenderedValue { get; init; }
+        public ScalarStyle Style { get; init; }
+        public bool IsPlainImplicit { get; init; }
+        public bool IsQuotedImplicit { get; init; }
     }
 
-    public sealed class MappingStartEventInfo : IObjectEventInfo
+    public readonly struct MappingStartEventInfo : IObjectEventInfo
     {
         public MappingStartEventInfo(IObjectDescriptor source)
         {
@@ -76,13 +76,13 @@ namespace YamlDotNet.Serialization
         }
 
         public IObjectDescriptor Source { get; }
-        public AnchorName Anchor { get; set; }
-        public TagName Tag { get; set; }
-        public bool IsImplicit { get; set; }
-        public MappingStyle Style { get; set; }
+        public AnchorName Anchor { get; init; }
+        public TagName Tag { get; init; }
+        public bool IsImplicit { get; init; }
+        public MappingStyle Style { get; init; }
     }
 
-    public sealed class MappingEndEventInfo
+    public readonly struct MappingEndEventInfo
     {
         public MappingEndEventInfo(IObjectDescriptor source)
         {
@@ -92,7 +92,7 @@ namespace YamlDotNet.Serialization
         public IObjectDescriptor Source { get; }
     }
 
-    public sealed class SequenceStartEventInfo : IObjectEventInfo
+    public readonly struct SequenceStartEventInfo : IObjectEventInfo
     {
         public SequenceStartEventInfo(IObjectDescriptor source)
         {
@@ -100,13 +100,13 @@ namespace YamlDotNet.Serialization
         }
 
         public IObjectDescriptor Source { get; }
-        public AnchorName Anchor { get; set; }
-        public TagName Tag { get; set; }
-        public bool IsImplicit { get; set; }
-        public SequenceStyle Style { get; set; }
+        public AnchorName Anchor { get; init; }
+        public TagName Tag { get; init; }
+        public bool IsImplicit { get; init; }
+        public SequenceStyle Style { get; init; }
     }
 
-    public sealed class SequenceEndEventInfo
+    public readonly struct SequenceEndEventInfo
     {
         public SequenceEndEventInfo(IObjectDescriptor source)
         {

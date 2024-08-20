@@ -46,7 +46,7 @@ namespace YamlDotNet.Serialization.ObjectGraphVisitors
                 if (!alias.IsEmpty && !emittedAliases.Add(alias))
                 {
                     var aliasEventInfo = new AliasEventInfo(value, alias);
-                    eventEmitter.Emit(aliasEventInfo, context);
+                    eventEmitter.Emit(ref aliasEventInfo, context);
                     return aliasEventInfo.NeedsExpansion;
                 }
             }
@@ -56,13 +56,15 @@ namespace YamlDotNet.Serialization.ObjectGraphVisitors
         public override void VisitMappingStart(IObjectDescriptor mapping, Type keyType, Type valueType, IEmitter context, ObjectSerializer serializer)
         {
             var anchor = aliasProvider.GetAlias(mapping.NonNullValue());
-            eventEmitter.Emit(new MappingStartEventInfo(mapping) { Anchor = anchor }, context);
+            var eventInfo = new MappingStartEventInfo(mapping) { Anchor = anchor };
+            eventEmitter.Emit(ref eventInfo, context);
         }
 
         public override void VisitSequenceStart(IObjectDescriptor sequence, Type elementType, IEmitter context, ObjectSerializer serializer)
         {
             var anchor = aliasProvider.GetAlias(sequence.NonNullValue());
-            eventEmitter.Emit(new SequenceStartEventInfo(sequence) { Anchor = anchor }, context);
+            var eventInfo = new SequenceStartEventInfo(sequence) { Anchor = anchor };
+            eventEmitter.Emit(ref eventInfo, context);
         }
 
         public override void VisitScalar(IObjectDescriptor scalar, IEmitter context, ObjectSerializer serializer)
@@ -70,9 +72,9 @@ namespace YamlDotNet.Serialization.ObjectGraphVisitors
             var scalarInfo = new ScalarEventInfo(scalar);
             if (scalar.Value != null)
             {
-                scalarInfo.Anchor = aliasProvider.GetAlias(scalar.Value);
+                scalarInfo = scalarInfo with { Anchor = aliasProvider.GetAlias(scalar.Value) };
             }
-            eventEmitter.Emit(scalarInfo, context);
+            eventEmitter.Emit(ref scalarInfo, context);
         }
     }
 }
