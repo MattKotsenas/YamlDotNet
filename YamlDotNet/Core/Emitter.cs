@@ -1906,20 +1906,20 @@ namespace YamlDotNet.Core
         {
             return UriReplacer.Replace(text, delegate (Match match)
             {
-                var buffer = StringBuilderPool.Rent();
-                try
-                {
+                var buffer = new ValueStringBuilder(); //StringBuilderPool.Rent();
+                //try
+                //{
                     //var buffer = bufferBuilder.Builder;
                     foreach (var toEncode in Encoding.UTF8.GetBytes(match.Value))
                     {
-                        buffer.AppendFormat("%{0:X02}", toEncode);
+                        buffer.Append(string.Format("%{0:X02}", toEncode));
                     }
                     return buffer.ToString();
-                }
-                finally
-                {
-                    StringBuilderPool.Return(buffer);
-                }
+                //}
+                //finally
+                //{
+                //    StringBuilderPool.Return(buffer);
+                //}
             });
         }
 

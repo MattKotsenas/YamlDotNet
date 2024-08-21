@@ -29,7 +29,7 @@ namespace YamlDotNet.Core.ObjectPool
     /// Pooling of StringBuilder instances.
     /// </summary>
     [DebuggerStepThrough]
-    internal static class StringBuilderPool
+    internal static class StringBuilderPool2
     {
         private static readonly ObjectPool<StringBuilder> Pool = ObjectPool.Create(new StringBuilderPooledObjectPolicy
         {

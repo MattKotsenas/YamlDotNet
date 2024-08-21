@@ -242,7 +242,7 @@ namespace YamlDotNet.Core
             tokenAvailable = true;
         }
 
-        private static bool StartsWith(StringBuilder what, char start)
+        private static bool StartsWith(ref ValueStringBuilder what, char start)
         {
             return what.Length > 0 && what[0] == start;
         }
@@ -651,9 +651,9 @@ namespace YamlDotNet.Core
                     Skip();
                 }
 
-                var text = StringBuilderPool.Rent();
-                try
-                {
+                var text = new ValueStringBuilder(); //StringBuilderPool.Rent();
+                //try
+                //{
                     while (!analyzer.IsBreakOrZero())
                     {
                         text.Append(ReadCurrentCharacter());
@@ -668,11 +668,11 @@ namespace YamlDotNet.Core
 
                         tokens.Enqueue(new Comment(text.ToString(), isInline, start, cursor.Mark()));
                     }
-                }
-                finally
-                {
-                    StringBuilderPool.Return(text);
-                }
+                //}
+                //finally
+                //{
+                //    StringBuilderPool.Return(text);
+                //}
             }
         }
 
@@ -1309,9 +1309,9 @@ namespace YamlDotNet.Core
             //     '[', ']', '{', '}' and ','
             // ref: https://yaml.org/spec/1.2/spec.html#id2785586
 
-            var value = StringBuilderPool.Rent();
-            try
-            {
+            var value = new ValueStringBuilder(); // StringBuilderPool.Rent();
+            //try
+            //{
                 while (!analyzer.IsWhiteBreakOrZero())
                 {
                     // Anchor: read all allowed characters
@@ -1352,11 +1352,11 @@ namespace YamlDotNet.Core
                 {
                     return previousAnchor = new Anchor(name, start, cursor.Mark());
                 }
-            }
-            finally
-            {
-                StringBuilderPool.Return(value);
-            }
+            //}
+            //finally
+            //{
+            //    StringBuilderPool.Return(value);
+            //}
         }
 
         /// <summary>
@@ -1493,12 +1493,12 @@ namespace YamlDotNet.Core
 
         Token ScanBlockScalar(bool isLiteral)
         {
-            var value = StringBuilderPool.Rent();
-            var leadingBreak = StringBuilderPool.Rent();
-            var trailingBreaks = StringBuilderPool.Rent();
+            var value = new ValueStringBuilder(); //StringBuilderPool.Rent();
+            var leadingBreak = new ValueStringBuilder(); //StringBuilderPool.Rent();
+            var trailingBreaks = new ValueStringBuilder(); //StringBuilderPool.Rent();
 
-            try
-            {
+            //try
+            //{
                 var chomping = 0;
                 var increment = 0;
                 var currentIndent = (long)0;
@@ -1610,7 +1610,7 @@ namespace YamlDotNet.Core
 
                 // Scan the leading line breaks and determine the indentation level if needed.
 
-                currentIndent = ScanBlockScalarBreaks(currentIndent, trailingBreaks, isLiteral, ref end, ref isFirstLine);
+                currentIndent = ScanBlockScalarBreaks(currentIndent, ref trailingBreaks, isLiteral, ref end, ref isFirstLine);
                 isFirstLine = false;
 
                 // Scan the block scalar content.
@@ -1625,7 +1625,7 @@ namespace YamlDotNet.Core
 
                     // Check if we need to fold the leading line break.
 
-                    if (!isLiteral && StartsWith(leadingBreak, '\n') && !leadingBlank && !trailingBlank)
+                    if (!isLiteral && StartsWith(ref leadingBreak, '\n') && !leadingBlank && !trailingBlank)
                     {
                         // Do we need to join the lines by space?
 
@@ -1667,31 +1667,31 @@ namespace YamlDotNet.Core
 
                     // Eat the following indentation spaces and line breaks.
 
-                    currentIndent = ScanBlockScalarBreaks(currentIndent, trailingBreaks, isLiteral, ref end, ref isFirstLine);
+                    currentIndent = ScanBlockScalarBreaks(currentIndent, ref trailingBreaks, isLiteral, ref end, ref isFirstLine);
                 }
 
                 // Chomp the tail.
 
                 if (chomping != -1)
                 {
-                    value.Append(leadingBreak);
+                    value.Append(leadingBreak.AsSpan());
                 }
                 if (chomping == 1)
                 {
-                    value.Append(trailingBreaks);
+                    value.Append(trailingBreaks.AsSpan());
                 }
 
                 // Create a token.
 
                 var style = isLiteral ? ScalarStyle.Literal : ScalarStyle.Folded;
                 return new Scalar(value.ToString(), style, start, end);
-            }
-            finally
-            {
-                StringBuilderPool.Return(value);
-                StringBuilderPool.Return(leadingBreak);
-                StringBuilderPool.Return(trailingBreaks);
-            }
+            //}
+            //finally
+            //{
+            //    StringBuilderPool.Return(value);
+            //    StringBuilderPool.Return(leadingBreak);
+            //    StringBuilderPool.Return(trailingBreaks);
+            //}
         }
 
         /// <summary>
@@ -1699,7 +1699,7 @@ namespace YamlDotNet.Core
         /// indentation level if needed.
         /// </summary>
 
-        private long ScanBlockScalarBreaks(long currentIndent, StringBuilder breaks, bool isLiteral, ref Mark end, ref bool? isFirstLine)
+        private long ScanBlockScalarBreaks(long currentIndent, ref ValueStringBuilder breaks, bool isLiteral, ref Mark end, ref bool? isFirstLine)
         {
             var maxIndent = (long)0;
             var indentOfFirstLine = (long)-1;
@@ -1828,14 +1828,14 @@ namespace YamlDotNet.Core
 
             // Consume the content of the quoted scalar.
 
-            var value = StringBuilderPool.Rent();
+            var value = new ValueStringBuilder(); //StringBuilderPool.Rent();
 
-            var whitespaces = StringBuilderPool.Rent();
-            var leadingBreak = StringBuilderPool.Rent();
-            var trailingBreaks = StringBuilderPool.Rent();
+            var whitespaces = new ValueStringBuilder(); // StringBuilderPool.Rent();
+            var leadingBreak = new ValueStringBuilder(); // StringBuilderPool.Rent();
+            var trailingBreaks = new ValueStringBuilder(); // StringBuilderPool.Rent();
 
-            try
-            {
+            //try
+            //{
                 var hasLeadingBlanks = false;
 
                 while (true)
@@ -2068,7 +2068,7 @@ namespace YamlDotNet.Core
                     {
                         // Do we need to fold line breaks?
 
-                        if (StartsWith(leadingBreak, '\n'))
+                        if (StartsWith(ref leadingBreak, '\n'))
                         {
                             if (trailingBreaks.Length == 0)
                             {
@@ -2099,14 +2099,14 @@ namespace YamlDotNet.Core
                 Skip();
 
                 return new Scalar(value.ToString(), isSingleQuoted ? ScalarStyle.SingleQuoted : ScalarStyle.DoubleQuoted, start, cursor.Mark());
-            }
-            finally
-            {
-                StringBuilderPool.Return(value);
-                StringBuilderPool.Return(whitespaces);
-                StringBuilderPool.Return(leadingBreak);
-                StringBuilderPool.Return(trailingBreaks);
-            }
+            //}
+            //finally
+            //{
+            //    StringBuilderPool.Return(value);
+            //    StringBuilderPool.Return(whitespaces);
+            //    StringBuilderPool.Return(leadingBreak);
+            //    StringBuilderPool.Return(trailingBreaks);
+            //}
         }
 
         /// <summary>
@@ -2140,13 +2140,13 @@ namespace YamlDotNet.Core
 
         private Scalar ScanPlainScalar(ref bool isMultiline)
         {
-            var value = StringBuilderPool.Rent();
-            var whitespaces = StringBuilderPool.Rent();
-            var leadingBreak = StringBuilderPool.Rent();
-            var trailingBreaks = StringBuilderPool.Rent();
+            var value = new ValueStringBuilder(); // StringBuilderPool.Rent();
+            var whitespaces = new ValueStringBuilder(); //StringBuilderPool.Rent();
+            var leadingBreak = new ValueStringBuilder(); //StringBuilderPool.Rent();
+            var trailingBreaks = new ValueStringBuilder(); //StringBuilderPool.Rent();
 
-            try
-            {
+            //try
+            //{
                 var hasLeadingBlanks = false;
                 var currentIndent = indent + 1;
 
@@ -2205,7 +2205,7 @@ namespace YamlDotNet.Core
                             {
                                 // Do we need to fold line breaks?
 
-                                if (StartsWith(leadingBreak, '\n'))
+                                if (StartsWith(ref leadingBreak, '\n'))
                                 {
                                     if (trailingBreaks.Length == 0)
                                     {
@@ -2213,13 +2213,13 @@ namespace YamlDotNet.Core
                                     }
                                     else
                                     {
-                                        value.Append(trailingBreaks);
+                                        value.Append(trailingBreaks.AsSpan());
                                     }
                                 }
                                 else
                                 {
-                                    value.Append(leadingBreak);
-                                    value.Append(trailingBreaks);
+                                    value.Append(leadingBreak.AsSpan());
+                                    value.Append(trailingBreaks.AsSpan());
                                 }
 
                                 leadingBreak.Length = 0;
@@ -2229,7 +2229,7 @@ namespace YamlDotNet.Core
                             }
                             else
                             {
-                                value.Append(whitespaces);
+                                value.Append(whitespaces.AsSpan());
                                 whitespaces.Length = 0;
                             }
                         }
@@ -2312,14 +2312,14 @@ namespace YamlDotNet.Core
                 // Create a token.
 
                 return new Scalar(value.ToString(), ScalarStyle.Plain, start, end);
-            }
-            finally
-            {
-                StringBuilderPool.Return(value);
-                StringBuilderPool.Return(whitespaces);
-                StringBuilderPool.Return(leadingBreak);
-                StringBuilderPool.Return(trailingBreaks);
-            }
+            //}
+            //finally
+            //{
+            //    StringBuilderPool.Return(value);
+            //    StringBuilderPool.Return(whitespaces);
+            //    StringBuilderPool.Return(leadingBreak);
+            //    StringBuilderPool.Return(trailingBreaks);
+            //}
         }
 
 
@@ -2354,10 +2354,10 @@ namespace YamlDotNet.Core
         /// </summary>
         private string ScanDirectiveName(in Mark start)
         {
-            var name = StringBuilderPool.Rent();
+            var name = new ValueStringBuilder(); //StringBuilderPool.Rent();
 
-            try
-            {
+            //try
+            //{
                 // Consume the directive name.
 
                 while (analyzer.IsAlphaNumericDashOrUnderscore())
@@ -2387,11 +2387,11 @@ namespace YamlDotNet.Core
                 }
 
                 return name.ToString();
-            }
-            finally
-            {
-                StringBuilderPool.Return(name);
-            }
+            //}
+            //finally
+            //{
+            //    StringBuilderPool.Return(name);
+            //}
         }
 
         private void SkipWhitespaces()
@@ -2479,10 +2479,10 @@ namespace YamlDotNet.Core
 
         private string ScanTagUri(string? head, Mark start)
         {
-            var tag = StringBuilderPool.Rent();
+            var tag = new ValueStringBuilder(); //StringBuilderPool.Rent();
 
-            try
-            {
+            //try
+            //{
                 if (head != null && head.Length > 1)
                 {
 #if NETFRAMEWORK || NETSTANDARD2_0
@@ -2535,11 +2535,11 @@ namespace YamlDotNet.Core
                 }
 
                 return result;
-            }
-            finally
-            {
-                StringBuilderPool.Return(tag);
-            }
+            //}
+            //finally
+            //{
+            //    StringBuilderPool.Return(tag);
+            //}
         }
 
         private static readonly byte[] EmptyBytes = new byte[0];
@@ -2630,10 +2630,10 @@ namespace YamlDotNet.Core
 
             // Copy the '!' character.
 
-            var tagHandle = StringBuilderPool.Rent();
+            var tagHandle = new ValueStringBuilder(); //StringBuilderPool.Rent();
 
-            try
-            {
+            //try
+            //{
                 tagHandle.Append(ReadCurrentCharacter());
 
                 // Copy all subsequent alphabetical and numerical characters.
@@ -2664,11 +2664,11 @@ namespace YamlDotNet.Core
                 }
 
                 return tagHandle.ToString();
-            }
-            finally
-            {
-                StringBuilderPool.Return(tagHandle);
-            }
+            //}
+            //finally
+            //{
+            //    StringBuilderPool.Return(tagHandle);
+            //}
         }
 
         /// <summary>

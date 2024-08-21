@@ -21,6 +21,7 @@
 
 using System;
 using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 using YamlDotNet.Core;
 using YamlDotNet.Core.Events;
@@ -164,10 +165,10 @@ namespace YamlDotNet.Serialization.NodeDeserializers
 
         private object DeserializeIntegerHelper(TypeCode typeCode, string value)
         {
-            var numberBuilder = StringBuilderPool.Rent();
+            var numberBuilder = new ValueStringBuilder(); //StringBuilderPool.Rent();
 
-            try
-            {
+            //try
+            //{
                 var currentIndex = 0;
                 var isNegative = false;
                 int numberBase;
@@ -288,11 +289,11 @@ namespace YamlDotNet.Serialization.NodeDeserializers
                 {
                     return CastInteger(result, typeCode);
                 }
-            }
-            finally
-            {
-                StringBuilderPool.Return(numberBuilder);
-            }
+            //}
+            //finally
+            //{
+            //    StringBuilderPool.Return(numberBuilder);
+            //}
         }
 
         private static object CastInteger(long number, TypeCode typeCode)
