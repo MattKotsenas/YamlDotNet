@@ -33,6 +33,8 @@ namespace YamlDotNet.Serialization.Utilities
     /// </summary>
     internal static class StringExtensions
     {
+        private const int StackAllocSize = 256; // Choose a value that's likely to be large enough hold most strings, but but small enough to avoid stack overflows.
+
 #if NET8_0_OR_GREATER
         private static readonly SearchValues<char> Separators = SearchValues.Create(['-', '_']);
 #else
@@ -42,7 +44,8 @@ namespace YamlDotNet.Serialization.Utilities
         private static string ToCamelOrPascalCase(ReadOnlySpan<char> span, Func<char, char> firstLetterTransform)
         {
             //using var wrapper = StringBuilderPool.Rent();
-            var builder = new ValueStringBuilder(span.Length); //wrapper.Builder;
+            var builder = new ValueStringBuilder(stackalloc char[StackAllocSize]); //wrapper.Builder;
+            builder.EnsureCapacity(span.Length); // Converting to camel case will never increase the length of the string, so ensure the string builder is large enough (spilling to the heap if our stackalloc isn't big enough) to avoid growing the string builder
 
             for (var i = 0; i < span.Length; i++)
             {
@@ -103,7 +106,8 @@ namespace YamlDotNet.Serialization.Utilities
         public static string FromCamelCase(this ReadOnlySpan<char> span, char separator)
         {
             //using var wrapper = StringBuilderPool.Rent();
-            var builder = new ValueStringBuilder(span.Length);
+            var builder = new ValueStringBuilder(stackalloc char[StackAllocSize]);
+            //builder.EnsureCapacity(span.Length * 2); // Reserve the worst-case amount of memory
 
             // Ensure first letter is always lowercase
             builder.Append(char.ToLower(span[0]));
