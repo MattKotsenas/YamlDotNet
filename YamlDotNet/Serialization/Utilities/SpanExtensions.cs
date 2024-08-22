@@ -20,38 +20,41 @@
 // SOFTWARE.
 
 using System;
-using YamlDotNet.Serialization.Utilities;
+using System.Runtime.CompilerServices;
 
-namespace YamlDotNet.Serialization.NamingConventions
+namespace YamlDotNet.Serialization.Utilities
 {
-    /// <summary>
-    /// Convert the string with underscores (this_is_a_test) or hyphens (this-is-a-test) to 
-    /// lower case (thisisatest).
-    /// </summary>
-    public sealed class LowerCaseNamingConvention : INamingConvention
+    internal static class SpanExtensions
     {
-        private LowerCaseNamingConvention() { }
-
-        public string Apply(string value)
+        /// <summary>
+        /// Slices the span from the start index to the end. If the start index is out of bounds, an empty span is returned.
+        /// </summary>
+        /// <inheritdoc cref="Span{T}.Slice(int)"/>/>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ReadOnlySpan<T> SafeSlice<T>(this ReadOnlySpan<T> span, int start)
         {
-            return value.AsSpan().ToCamelCase().ToLower();
-        }
-
-        public string Reverse(string value)
-        {
-            // lower case values don't have any context as to what should be upper or not. So we only do the first character
-            if (string.IsNullOrEmpty(value))
+            if ((uint)start > (uint)span.Length)
             {
-                return value;
+                return [];
             }
 
-            var span = value.AsSpan();
-            var result = new string([char.ToUpperInvariant(span[0]), .. span.Slice(1)]);
-
-            return result;
-
+            return span.Slice(start);
         }
 
-        public static readonly INamingConvention Instance = new LowerCaseNamingConvention();
+        /// <summary>
+        /// Slices the span from the start index to the end. If the or end index is out of bounds, an empty span is returned.
+        /// </summary>
+        /// <inheritdoc cref="Span{T}.Slice(int,int)"/>/>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ReadOnlySpan<T> SafeSlice<T>(this ReadOnlySpan<T> span, int start, int length)
+        {
+            var spanLength = span.Length;
+            if ((uint)start > (uint)spanLength || (uint)length > (uint)(spanLength - start))
+            {
+                return [];
+            }
+
+            return span.Slice(start);
+        }
     }
 }
